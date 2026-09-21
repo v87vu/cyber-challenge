@@ -2,7 +2,7 @@
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import {
   AR_CORRECT, KIDS_AR, ADULT_MILESTONES, KIDS_MILESTONES,
-  ADULT_TOTAL, KIDS_TOTAL, pickCorrect, pickWrong, pickAgeAr, pickAgeEn,
+  ADULT_TOTAL, KIDS_TOTAL, pickCorrect, pickWrong, pickAgeAr, pickAgeEn, passBrief,
 } from './helpers.mjs';
 
 const S = new URL('./shots/', import.meta.url).pathname;
@@ -65,8 +65,11 @@ await p.getByRole('button', { name: 'العربية', exact: true }).click();
 await p.waitForTimeout(250);
 await p.getByRole('link', { name: /START/ }).click();
 await p.waitForURL('**/play');
-await p.waitForTimeout(300);
-if (!(await p.locator('body').innerText()).includes('كم عمرك؟')) note('age step (first) missing');
+await p.getByText('حماية المجتمع').waitFor({ timeout: 8000 }).catch(() => note('brief message missing'));
+if (!(await p.locator('body').innerText()).includes('سيف')) note('Saif brief missing');
+await shot('m0-brief');
+await passBrief(p);
+if (!(await p.locator('body').innerText()).includes('كم عمرك؟')) note('age step after brief missing');
 await shot('m2b-age');
 await pickAgeAr(p);
 if (!(await p.locator('body').innerText()).includes('من أنت؟')) note('gender step (second) missing');
@@ -98,6 +101,7 @@ ok('countdown + keyboard + mute');
 
 /* 3) جولة كاملة 22/22 */
 await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+await passBrief(p);
 await pickAgeAr(p);
 await p.getByText('أنثى', { exact: true }).click();
 await p.waitForTimeout(250);
@@ -144,6 +148,7 @@ ok('loss at 15 → شهادة تقدير');
   let differs = false, prev = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+    await passBrief(p);
     await pickAgeAr(p);
     await p.getByText('أنثى', { exact: true }).click();
     await p.waitForTimeout(200);
@@ -161,6 +166,7 @@ ok('loss at 15 → شهادة تقدير');
 /* 7) الإنجليزية */
 await fresh({ gender: 'female', lang: 'en', age: '18-24', onboarded: true });
 await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+await passBrief(p);
 await pickAgeEn(p);
 await p.getByText('Female', { exact: true }).click();
 await p.waitForTimeout(250);
@@ -176,6 +182,7 @@ ok('English mode');
 /* 8) وضع الأطفال 12–17 */
 await fresh(null);
 await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+await passBrief(p);
 await pickAgeAr(p, '12–17 سنة');
 await p.getByText('ذكر', { exact: true }).click();
 await p.waitForTimeout(300);

@@ -66,6 +66,13 @@ for (const [name, w, h] of VIEWPORTS) {
   await p.getByRole('link', { name: /START/ }).click();
   await p.waitForURL('**/play');
   await p.waitForTimeout(300);
+  await noHScroll(p, name, 'brief');
+  await p.locator('main').click({ position: { x: 60, y: 200 } }).catch(() => {});
+  const briefCta = p.getByTestId('brief-cta');
+  await briefCta.waitFor({ timeout: 8000 });
+  await inView(p, briefCta, 'brief CTA (sticky)', name);
+  await briefCta.click();
+  await p.waitForTimeout(250);
   await noHScroll(p, name, 'age');
   await p.getByText('18–24 سنة', { exact: true }).click();
   await p.waitForTimeout(120);

@@ -16,6 +16,10 @@ const AR = (g: Gender) => {
     onbGenderTitle: 'من أنت؟',
     onbGenderHint: 'نستخدم هذا لمخاطبتك بالصيغة الصحيحة فقط.',
     pickCharacter: 'اضغط على شخصيتك للاختيار',
+    briefName: 'سيف',
+    briefText:
+      'حماية المجتمع مسؤولية مشتركة، تبدأ بالوعي وتعززها اليقظة والمسؤولية. بتكاتفنا، نحافظ على أمن مجتمعنا الرقمي ونصنع بيئة أكثر أماناً لجميع أفراد المجتمع.',
+    briefCta: 'فهمت، لنبدأ!',
     onbAgeTitle: f ? 'كم عمركِ؟' : 'كم عمرك؟',
     onbAgeHint: 'يساعدنا هذا في تحسين التجربة وإعداد التقارير.',
     ageGroups: [
@@ -153,6 +157,10 @@ const EN = () => ({
   onbGenderTitle: 'Who are you?',
   onbGenderHint: 'Used only to address you correctly.',
   pickCharacter: 'Tap your character to choose',
+  briefName: 'Saif',
+  briefText:
+    'Protecting the community is a shared responsibility — it begins with awareness and grows through vigilance and accountability. Together, we safeguard our digital community and create a safer environment for everyone.',
+  briefCta: 'Got it — let\u2019s begin!',
   onbAgeTitle: 'How old are you?',
   onbAgeHint: 'This helps us improve the experience and reporting.',
   ageGroups: [

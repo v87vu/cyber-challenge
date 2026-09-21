@@ -14,7 +14,7 @@ import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } 
 import { AGE_GROUPS, setAge, setGender, type AgeGroup, type Gender } from '@/lib/prefs';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
-type Phase = 'gender' | 'age' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
+type Phase = 'brief' | 'gender' | 'age' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
 
 const TIME = 45;
 const COUNT_FROM = 3;
@@ -35,7 +35,9 @@ export default function Play() {
   const { gender, lang, age, s } = usePrefs();
   const quiz = age === '12-17' ? QUIZ_KIDS : QUIZ_ADULT;
   const MS = age === '12-17' ? KIDS_MILESTONES : MILESTONES;
-  const [phase, setPhase] = useState<Phase>('age');
+  const [phase, setPhase] = useState<Phase>('brief');
+  const [briefWords, setBriefWords] = useState(0);
+  const [briefPose, setBriefPose] = useState(1);
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [timerOn, setTimerOn] = useState(true);
@@ -162,6 +164,31 @@ export default function Play() {
     }, 1000);
     return () => clearTimeout(t);
   }, [phase, timerOn, left, lose, level.id]);
+
+  // التمهيد: سيف يتحدث — كتابة كلمة كلمة وتبديل وقفاته أثناء الكلام
+  const briefTotal = s.briefText.split(' ').length;
+  const briefDone = briefWords >= briefTotal;
+  useEffect(() => {
+    if (phase !== 'brief') return;
+    // حمّل الوقفات مسبقاً
+    for (let i = 1; i <= 6; i++) {
+      const img = new window.Image();
+      img.src = `/art/saif-${i}.png`;
+    }
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== 'brief' || briefDone) return;
+    const t = setTimeout(() => setBriefWords((w) => w + 1), 150);
+    return () => clearTimeout(t);
+  }, [phase, briefWords, briefDone]);
+  useEffect(() => {
+    if (phase !== 'brief' || briefDone) return;
+    const speaking = [1, 2, 4, 3, 5];
+    const t = setInterval(() => {
+      setBriefPose((p_) => speaking[(speaking.indexOf(p_) + 1) % speaking.length] ?? 2);
+    }, 1200);
+    return () => clearInterval(t);
+  }, [phase, briefDone]);
 
   // الاحتفال الذهبي: دحرجة طبول ثم يبدأ السؤال تلقائياً
   useEffect(() => {
@@ -297,6 +324,90 @@ export default function Play() {
           </div>
 
           <div className="mt-8">{MenuLink}</div>
+        </div>
+      </Shell>
+    );
+  }
+
+  /* ------------------------------------------------- تمهيد الضابط سيف */
+  if (phase === 'brief') {
+    const words = s.briefText.split(' ');
+    const shown = words.slice(0, briefWords).join(' ');
+    return (
+      <Shell dim={0.3}>
+        <div
+          className="anim-in flex min-h-[92dvh] flex-col"
+          onClick={() => {
+            if (!briefDone) setBriefWords(briefTotal);
+          }}
+        >
+          {/* فقاعة الحديث */}
+          <div className="relative mt-2">
+            <div
+              className="rounded-3xl px-5 py-4"
+              style={{ background: '#ffffff', border: '2px solid var(--line)', boxShadow: 'var(--shadow)' }}
+            >
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black text-white"
+                style={{ background: '#0f766e' }}
+              >
+                🛡️ {s.briefName}
+              </span>
+              <p className="mt-3 min-h-28 text-[15px] font-black leading-8 sm:text-base sm:leading-9">
+                {shown}
+                {!briefDone && <span className="blink text-[var(--gold-dark)]"> ▌</span>}
+              </p>
+              {!briefDone && (
+                <p className="mt-1 text-[10px] font-bold" style={{ color: 'var(--fg-dim)' }}>
+                  {lang === 'ar' ? 'اضغط لعرض الرسالة كاملة' : 'Tap to show the full message'}
+                </p>
+              )}
+            </div>
+            <span
+              className="absolute -bottom-[9px] start-1/2 h-4 w-4 rotate-45"
+              style={{ background: '#fff', borderInlineEnd: '2px solid var(--line)', borderBottom: '2px solid var(--line)' }}
+            />
+          </div>
+
+          {/* الضابط */}
+          <div className="relative mt-4 flex flex-1 items-end justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              key={briefDone ? 6 : briefPose}
+              src={`/art/saif-${briefDone ? 6 : briefPose}.png`}
+              alt={s.briefName}
+              className="anim-in select-none"
+              draggable={false}
+              style={{
+                height: 'min(46dvh, 430px)',
+                width: 'auto',
+                filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))',
+              }}
+            />
+          </div>
+
+          {/* المتابعة */}
+          <div
+            className="sticky bottom-0 pt-4"
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+          >
+            {briefDone ? (
+              <button
+                data-testid="brief-cta"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sfx.confirm();
+                  setPhase('age');
+                }}
+                className="anim-in w-full rounded-2xl px-6 py-4 text-lg font-black transition-transform active:translate-y-[3px]"
+                style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
+              >
+                {s.briefCta}
+              </button>
+            ) : (
+              <div className="h-[60px]" />
+            )}
+          </div>
         </div>
       </Shell>
     );

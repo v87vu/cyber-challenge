@@ -23,6 +23,13 @@ export const pickCorrect = (page, i, arr) =>
 export const pickWrong = (page, i, arr) =>
   page.getByTestId('option').filter({ hasNotText: arr[i] }).first().click();
 
+/** تمهيد الضابط سيف: أكمل النص بنقرة ثم تابع */
+export const passBrief = async (page) => {
+  await page.locator('main').click({ position: { x: 60, y: 200 } }).catch(() => {});
+  await page.getByTestId('brief-cta').click({ timeout: 8000 });
+  await page.waitForTimeout(250);
+};
+
 export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'متابعة' }).click();

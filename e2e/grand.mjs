@@ -1,6 +1,6 @@
 /* المجموعة الموسّعة: مهلة حقيقية، مشاركة، تنزيل الشهادة، تعرّق L3، قص الاحتفال، وزن الصفحة */
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
-import { AR_CORRECT, EN_CORRECT, ADULT_MILESTONES, ADULT_TOTAL, pickCorrect, pickWrong, pickAgeAr, pickAgeEn } from './helpers.mjs';
+import { AR_CORRECT, EN_CORRECT, ADULT_MILESTONES, ADULT_TOTAL, pickCorrect, pickWrong, pickAgeAr, pickAgeEn, passBrief } from './helpers.mjs';
 import { mkdirSync } from 'fs';
 const S = new URL('./shots/', import.meta.url).pathname;
 mkdirSync(S, { recursive: true });
@@ -32,6 +32,7 @@ await p.reload({ waitUntil: 'networkidle' });
 await p.getByRole('link', { name: /START/ }).click();
 await p.waitForURL('**/play');
 await p.waitForTimeout(300);
+await passBrief(p);
 await pickAgeAr(p);
 await p.getByText('ذكر', { exact: true }).click();
 await p.waitForTimeout(250);
@@ -93,6 +94,7 @@ ok('review + finish');
 
 /* 2) انتهاء الوقت (45 ثانية) */
 await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+await passBrief(p);
 await pickAgeAr(p);
 await p.getByText('ذكر', { exact: true }).click();
 await p.waitForTimeout(250);
@@ -110,6 +112,7 @@ ok('menu from loss');
 /* 3) الإنجليزية: خسارة + شهادة EN */
 await p.evaluate(() => localStorage.setItem('dac-prefs', JSON.stringify({ gender: 'female', lang: 'en', age: '18-24', onboarded: true })));
 await p.goto(BASE + '/play', { waitUntil: 'networkidle' });
+await passBrief(p);
 await pickAgeEn(p);
 await p.getByText('Female', { exact: true }).click();
 await p.waitForTimeout(250);
