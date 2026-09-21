@@ -332,7 +332,6 @@ export default function Play() {
   /* ------------------------------------------------- تمهيد الضابط سيف */
   if (phase === 'brief') {
     const words = s.briefText.split(' ');
-    const shown = words.slice(0, briefWords).join(' ');
     return (
       <Shell dim={0.3}>
         <div
@@ -354,8 +353,12 @@ export default function Play() {
                 🛡️ {s.briefName}
               </span>
               <p className="mt-3 min-h-28 text-[15px] font-black leading-8 sm:text-base sm:leading-9">
-                {shown}
-                {!briefDone && <span className="blink text-[var(--gold-dark)]"> ▌</span>}
+                {words.slice(0, briefWords).map((w, i) => (
+                  <span key={i} className={i === briefWords - 1 ? 'word-pop' : undefined}>
+                    {w}{' '}
+                  </span>
+                ))}
+                {!briefDone && <span className="blink text-[var(--gold-dark)]">▌</span>}
               </p>
               {!briefDone && (
                 <p className="mt-1 text-[10px] font-bold" style={{ color: 'var(--fg-dim)' }}>
@@ -364,13 +367,13 @@ export default function Play() {
               )}
             </div>
             <span
-              className="absolute -bottom-[9px] start-1/2 h-4 w-4 rotate-45"
+              className="absolute -bottom-[10px] start-1/2 h-5 w-5 -translate-x-1/2 rotate-45"
               style={{ background: '#fff', borderInlineEnd: '2px solid var(--line)', borderBottom: '2px solid var(--line)' }}
             />
           </div>
 
-          {/* الضابط */}
-          <div className="relative mt-4 flex flex-1 items-end justify-center">
+          {/* الضابط — رأسه تحت ذيل الفقاعة مباشرة ليخرج الكلام من فمه */}
+          <div className="relative -mt-2 flex flex-1 items-end justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               key={briefDone ? 6 : briefPose}
