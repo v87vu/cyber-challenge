@@ -343,7 +343,7 @@ export default function Play() {
           {/* فقاعة الحديث */}
           <div className="relative mt-2">
             <div
-              className="rounded-3xl px-5 py-4"
+              className="rounded-3xl px-4 py-3 sm:px-5 sm:py-4"
               style={{ background: '#ffffff', border: '2px solid var(--line)', boxShadow: 'var(--shadow)' }}
             >
               <span
@@ -352,7 +352,7 @@ export default function Play() {
               >
                 🛡️ {s.briefName}
               </span>
-              <p className="mt-3 min-h-28 text-[15px] font-black leading-8 sm:text-base sm:leading-9">
+              <p className="mt-2.5 min-h-24 text-[13.5px] font-black leading-7 sm:mt-3 sm:min-h-28 sm:text-base sm:leading-9">
                 {words.slice(0, briefWords).map((w, i) => (
                   <span key={i} className={i === briefWords - 1 ? 'word-pop' : undefined}>
                     {w}{' '}
@@ -379,13 +379,9 @@ export default function Play() {
               key={briefDone ? 6 : briefPose}
               src={`/art/saif-${briefDone ? 6 : briefPose}.png`}
               alt={s.briefName}
-              className="anim-in select-none"
+              className="anim-in w-auto select-none portrait:h-[min(36dvh,340px)] landscape:h-[min(46dvh,430px)]"
               draggable={false}
-              style={{
-                height: 'min(46dvh, 430px)',
-                width: 'auto',
-                filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))',
-              }}
+              style={{ filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))' }}
             />
           </div>
 
