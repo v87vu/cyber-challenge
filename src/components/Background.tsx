@@ -5,7 +5,45 @@
    - رأسي (الهاتف): الصورة بكامل عرضها مثبتة أسفل الشاشة حتى يظهر الحصن كاملاً،
      وسماء متدرجة تكمل الأعلى بلون حافة الصورة نفسها، مع تلاشٍ ناعم عند الالتقاء. */
 
-export default function Background({ dim = 0 }: { dim?: number }) {
+export default function Background({
+  dim = 0,
+  variant = 'fort',
+}: {
+  dim?: number;
+  variant?: 'fort' | 'hq';
+}) {
+  if (variant === 'hq') {
+    // مقر شرطة أم القيوين: نسختان أصليتان — عرضية وطولية — كلٌّ تملأ اتجاهها
+    return (
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/hq-h.jpg"
+          alt=""
+          className="absolute inset-0 hidden h-full w-full object-cover landscape:block"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/hq-v.jpg"
+          alt=""
+          className="absolute inset-0 hidden h-full w-full object-cover portrait:block"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 45%, rgba(255,251,240,0.22) 100%)',
+          }}
+        />
+        {dim > 0 && (
+          <div
+            className="absolute inset-0"
+            style={{ background: `rgba(248, 251, 255, ${Math.min(0.85, dim * 0.75)})` }}
+          />
+        )}
+      </div>
+    );
+  }
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       {/* الوضع العرضي */}

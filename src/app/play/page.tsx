@@ -333,7 +333,7 @@ export default function Play() {
   if (phase === 'brief') {
     const words = s.briefText.split(' ');
     return (
-      <Shell dim={0.3}>
+      <Shell dim={0.12} bg="hq">
         <div
           className="anim-in flex min-h-[92dvh] flex-col"
           onClick={() => {

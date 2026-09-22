@@ -8,15 +8,17 @@ export default function Shell({
   children,
   dim = 0,
   wide,
+  bg = 'fort',
 }: {
   children: React.ReactNode;
   dim?: number;
   wide?: boolean;
+  bg?: 'fort' | 'hq';
 }) {
   const { lang, dir } = usePrefs();
   return (
     <div dir={dir} lang={lang} className="min-h-dvh overflow-x-clip">
-      <Background dim={dim} />
+      <Background dim={dim} variant={bg} />
       <main
         className={`mx-auto flex min-h-dvh w-full flex-col px-4 py-6 pb-10 ${wide ? 'max-w-6xl' : 'max-w-2xl'}`}
       >
