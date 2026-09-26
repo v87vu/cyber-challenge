@@ -130,8 +130,7 @@ for (let i = 0; i < 5; i++) {
 await p.getByTestId('option').first().waitFor({ timeout: 15000 });
 await pickWrong(p, 5, ['', '', '', '', '', 'official channels']);
 await p.getByRole('button', { name: 'Confirm answer' }).click();
-await p.waitForTimeout(300);
-if (!(await p.locator('body').innerText()).includes('Wrong answer')) note('EN loss missing');
+await p.getByText('Wrong answer').waitFor({ timeout: 5000 }).catch(() => note('EN loss missing'));
 await p.getByRole('button', { name: /certificate/i }).click();
 if ((await p.getByRole('heading', { level: 2 }).innerText()) !== 'Certificate of Appreciation') note('EN cert heading wrong');
 await p.getByLabel('Name as it should appear').fill('Test Run');

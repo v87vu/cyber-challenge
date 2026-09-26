@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { LEVELS, REWARDS } from '@/lib/questions';
+import { useSyncExternalStore } from 'react';
+import { KIDS_LEVELS, KIDS_TOTAL, LEVELS, REWARDS, TOTAL } from '@/lib/questions';
+import { masteryServerSnapshot, masterySnapshot, subscribeMastery } from '@/lib/mastery';
+import MasteryPath from '@/components/MasteryPath';
 import { setLang, type Lang } from '@/lib/prefs';
 import { usePrefs } from '@/lib/usePrefs';
 import Shell from '@/components/Shell';
@@ -9,7 +12,9 @@ import { Chip, Panel } from '@/components/PixelUI';
 import { sfx } from '@/lib/sfx';
 
 export default function Home() {
-  const { lang, s } = usePrefs();
+  const { lang, age, s } = usePrefs();
+  const mastery = useSyncExternalStore(subscribeMastery, masterySnapshot, masteryServerSnapshot);
+  const kids = age === '12-17';
 
   /* ------------------------------------------------------ شاشة العنوان */
   return (
@@ -38,6 +43,24 @@ export default function Home() {
         </div>
 
         <div className="mt-10 flex flex-col items-center gap-3">
+          {/* خطّاف المهمة: سيف يستدعي اللاعب قبل أن يضغط */}
+          <div className="anim-in flex items-end gap-2" style={{ animationDelay: '250ms' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/saif-3.png"
+              alt=""
+              aria-hidden
+              className="h-24 w-auto select-none"
+              style={{ filter: 'drop-shadow(0 8px 12px rgba(30,50,80,0.25))' }}
+              draggable={false}
+            />
+            <span
+              className="mb-6 max-w-[220px] rounded-2xl rounded-es-sm px-3.5 py-2 text-start text-xs font-black leading-6 text-[var(--ink)]"
+              style={{ background: '#ffffff', boxShadow: 'var(--shadow)' }}
+            >
+              {lang === 'ar' ? 'بلاغ جديد وصلنا… هل أنت مستعد للمهمة؟' : 'A new case just came in… ready for the mission?'}
+            </span>
+          </div>
           <Link href="/play" onClick={() => sfx.start()}>
             <span
               className="pxl-btn bob inline-block px-12 py-4 text-lg font-black"
@@ -83,6 +106,17 @@ export default function Home() {
       </section>
 
       <div className="veil pxl w-full space-y-6 p-5 sm:p-6">
+        {/* ------------------------------------------------ خريطة الإتقان */}
+        <section className="w-full">
+          <MasteryPath
+            done={kids ? mastery.kids : mastery.adult}
+            total={kids ? KIDS_TOTAL : TOTAL}
+            levels={kids ? KIDS_LEVELS : LEVELS}
+            lang={lang}
+            kids={kids}
+          />
+        </section>
+
         {/* ---------------------------------------------------- المستويات */}
         <section className="w-full">
           <h2 className="ink mb-3 text-lg font-black">{s.levels}</h2>

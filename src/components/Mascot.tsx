@@ -48,18 +48,22 @@ export default function Mascot({
     }
   }, [g]);
 
+  // الغلاف يتمايل، والصورة تُستبدل بتلاشٍ قصير بدل القطع المفاجئ
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/art/${g}-${file}.png`}
-      alt={LABEL[mood]}
-      className={`${anim} ${className} select-none`}
-      style={{
-        height: size,
-        width: 'auto',
-        filter: 'drop-shadow(0 10px 14px rgba(30, 50, 80, 0.28))',
-      }}
-      draggable={false}
-    />
+    <span className={`${anim} ${className} inline-block select-none`} style={{ height: size }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={file}
+        src={`/art/${g}-${file}.png`}
+        alt={LABEL[mood]}
+        className="mood-in block"
+        style={{
+          height: size,
+          width: 'auto',
+          filter: 'drop-shadow(0 10px 14px rgba(30, 50, 80, 0.28))',
+        }}
+        draggable={false}
+      />
+    </span>
   );
 }

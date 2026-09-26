@@ -44,6 +44,9 @@ function ctx() {
 
 type Note = [freq: number, start: number, dur: number];
 
+/* المذبذبات المجدولة — لإيقافها عند مغادرة الشاشة أو الكتم */
+const live = new Set<OscillatorNode>();
+
 function play(notes: Note[], type: OscillatorType = 'square', vol = 0.07) {
   try {
     if (muted) return;
@@ -62,6 +65,8 @@ function play(notes: Note[], type: OscillatorType = 'square', vol = 0.07) {
     osc.connect(g).connect(a.destination);
     osc.start(t0 + start);
     osc.stop(t0 + start + dur + 0.02);
+    live.add(osc);
+    osc.onended = () => live.delete(osc);
   }
   } catch {
     /* الصوت تحسيني — لا يعطّل اللعبة أبداً */
@@ -80,14 +85,26 @@ function buzz(pattern: number | number[]) {
 export const sfx = {
   select: () => play([[N.E5, 0, 0.05]], 'triangle', 0.05),
   confirm: () => play([[N.G4, 0, 0.05], [N.C5, 0.05, 0.07]], 'triangle', 0.06),
-  correct: () => {
+  /* النغمة ترتفع نصف درجة مع كل إجابة في السلسلة (حتى سبع درجات) */
+  correct: (streak = 0) => {
     buzz(25);
+    const k = Math.pow(2, Math.min(streak, 7) / 12);
     play([
-      [N.C5, 0, 0.07],
-      [N.E5, 0.07, 0.07],
-      [N.G5, 0.14, 0.14],
+      [N.C5 * k, 0, 0.07],
+      [N.E5 * k, 0.07, 0.07],
+      [N.G5 * k, 0.14, 0.14],
     ]);
   },
+  /* لحظة التأكيد: نبضات متصاعدة تملأ مدة التشويق */
+  lockin: (ms = 400) => {
+    buzz(12);
+    const notes: Note[] = [];
+    const steps = Math.max(3, Math.round(ms / 110));
+    for (let i = 0; i < steps; i++) notes.push([330 * Math.pow(2, i / 12), (i * ms) / 1000 / steps, 0.045]);
+    play(notes, 'triangle', 0.045);
+  },
+  /* بريق فتح درس جديد في خريطة الإتقان */
+  unlock: () => play([[N.G5, 0, 0.05], [N.C6, 0.05, 0.1]], 'sine', 0.05),
   wrong: () => {
     buzz([60, 40, 120]);
     play(
@@ -136,6 +153,17 @@ export const sfx = {
     play(notes, 'square', 0.05);
   },
   start: () => play([[N.C4, 0, 0.06], [N.G4, 0.06, 0.06], [N.C5, 0.12, 0.14]]),
+  /* أوقف كل ما جُدول من نغمات واهتزاز */
+  stop: () => {
+    for (const o of live) {
+      try {
+        o.stop();
+      } catch {}
+    }
+    live.clear();
+    // إلغاء الاهتزاز يُحظر قبل أول نقرة — لا حاجة له أصلاً في تلك الحالة
+    if (typeof navigator !== 'undefined' && navigator.userActivation?.hasBeenActive) buzz(0);
+  },
 };
 
 /* اشتراك خارجي لحالة الكتم — يتجنّب setState داخل useEffect */
@@ -157,6 +185,7 @@ export function mutedServerSnapshot() {
 }
 
 export function toggleMuted() {
+  if (!muted) sfx.stop();
   setMuted(!muted);
   listeners.forEach((l) => l());
 }

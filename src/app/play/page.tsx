@@ -13,10 +13,21 @@ import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
 import { AGE_GROUPS, setAge, setGender, type AgeGroup, type Gender } from '@/lib/prefs';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
+import { lessonFor } from '@/lib/lessons';
+import { scenarioFor } from '@/lib/scenarios';
+import { recordCorrect } from '@/lib/mastery';
+import LessonCard from '@/components/LessonCard';
+import ReadAloud from '@/components/ReadAloud';
+import IncidentArtifact from '@/components/IncidentArtifact';
 
 type Phase = 'brief' | 'gender' | 'age' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
 
 const TIME = 45;
+/* لحظة التشويق بعد التأكيد — أطول في السؤال الذهبي والأخير */
+const LOCK_MS = 400;
+const LOCK_MS_BIG = 1200;
+/* كم تبقى الإجابة الصحيحة ظاهرة في مكانها قبل شاشة الخسارة */
+const WRONG_HOLD_MS = 1500;
 const COUNT_FROM = 3;
 const QUIZ_KIDS = getQuiz(true);
 const QUIZ_ADULT = getQuiz(false);
@@ -49,6 +60,11 @@ export default function Play() {
   // ترتيب عرض الخيارات لكل سؤال — يتجدد عشوائياً في كل جولة
   const [order, setOrder] = useState<number[][]>([]);
   const [agePick, setAgePick] = useState<AgeGroup | null>(null);
+  // لحظة التشويق: 'pending' أثناء الانتظار، 'wrong' أثناء عرض الإجابة الصحيحة بعد الخطأ
+  const [lock, setLock] = useState<null | 'pending' | 'wrong'>(null);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // دروس جديدة فُتحت في خريطة الإتقان خلال هذه الجولة
+  const [unlocked, setUnlocked] = useState(0);
 
   const mute = useSyncExternalStore(subscribeMuted, mutedSnapshot, mutedServerSnapshot);
   const revealRef = useRef<HTMLDivElement>(null);
@@ -65,19 +81,26 @@ export default function Play() {
   const isExpertFinal = level.id === 6;
   const score = phase === 'won' ? quiz.total : idx;
   const streak = idx;
+  const lesson = lessonFor(quiz.kids, q.n)?.[lang];
+  const scenario = scenarioFor(quiz.kids, q.n);
 
   const mood: Mood =
-    phase === 'lost' ? 'ko'
+    phase === 'lost' || lock === 'wrong' ? 'ko'
     : phase === 'won' ? 'win'
     : phase === 'correct' || phase === 'milestone' ? 'happy'
     : phase === 'question' ? 'think'
     : 'idle';
 
-  const lose = useCallback(() => {
-    sfx.wrong();
+  const lose = useCallback((sound = true) => {
+    if (sound) sfx.wrong();
     setNewBest(recordScore(idx, quiz.kids));
     setPhase('lost');
   }, [idx, quiz.kids]);
+
+  useEffect(() => () => {
+    if (lockTimer.current) clearTimeout(lockTimer.current);
+    sfx.stop();
+  }, []);
 
   const advance = useCallback(() => {
     const nextIdx = idx + 1;
@@ -88,12 +111,30 @@ export default function Play() {
   }, [idx, quiz]);
 
   const confirm = useCallback(() => {
-    if (selected === null) return;
-    if (selected === correctDisplay) {
-      sfx.correct();
-      setPhase('correct');
-    } else lose();
-  }, [selected, correctDisplay, lose]);
+    if (selected === null || lock) return;
+    const ms = isGolden || q.n === quiz.total ? LOCK_MS_BIG : LOCK_MS;
+    setLock('pending');
+    sfx.lockin(ms);
+    lockTimer.current = setTimeout(() => {
+      if (selected === correctDisplay) {
+        sfx.correct(streak);
+        if (recordCorrect(quiz.kids, q.n)) setUnlocked((u) => u + 1);
+        setLock(null);
+        setPhase('correct');
+      } else {
+        // أظهر الإجابة الصحيحة في مكانها لحظةً — هنا يحدث التعلّم
+        sfx.wrong();
+        setLock('wrong');
+        requestAnimationFrame(() =>
+          document.querySelector('[data-correct]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+        );
+        lockTimer.current = setTimeout(() => {
+          setLock(null);
+          lose(false);
+        }, WRONG_HOLD_MS);
+      }
+    }, ms);
+  }, [selected, lock, correctDisplay, lose, isGolden, q.n, quiz.total, quiz.kids, streak]);
 
   const next = useCallback(() => {
     if (q.n === quiz.total) {
@@ -131,6 +172,9 @@ export default function Play() {
     setLeft(TIME);
     setCount(COUNT_FROM);
     setNewBest(false);
+    setUnlocked(0);
+    setLock(null);
+    if (lockTimer.current) clearTimeout(lockTimer.current);
     setPhase('countdown');
   }, [quiz]);
 
@@ -151,7 +195,7 @@ export default function Play() {
 
   // مؤقّت السؤال — انتهاء الوقت يُحتسب خسارة
   useEffect(() => {
-    if (phase !== 'question' || !timerOn || left <= 0) return;
+    if (phase !== 'question' || !timerOn || left <= 0 || lock) return;
     const t = setTimeout(() => {
       if (left <= 1) {
         setSelected(null);
@@ -163,7 +207,7 @@ export default function Play() {
       }
     }, 1000);
     return () => clearTimeout(t);
-  }, [phase, timerOn, left, lose, level.id]);
+  }, [phase, timerOn, left, lose, level.id, lock]);
 
   // التمهيد: سيف يتحدث — كتابة كلمة كلمة وتبديل وقفاته أثناء الكلام
   const briefTotal = s.briefText.split(' ').length;
@@ -214,6 +258,7 @@ export default function Play() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (phase === 'question') {
+        if (lock) return;
         const n = Number(e.key);
         if (n >= 1 && n <= 4) {
           sfx.select();
@@ -226,7 +271,7 @@ export default function Play() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, confirm, next, advance]);
+  }, [phase, lock, confirm, next, advance]);
 
   const MenuBtn = (
     <Link
@@ -463,8 +508,9 @@ export default function Play() {
                   className="rounded-2xl px-3 py-3.5 text-start text-sm font-black transition-transform active:scale-[0.98]"
                   style={{
                     background: active ? '#ddf4ff' : '#ffffff',
-                    border: `2px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
-                    borderBottomWidth: 4,
+                    borderStyle: 'solid',
+                    borderColor: active ? '#1cb0f6' : 'var(--line)',
+                    borderWidth: '2px 2px 4px',
                     color: active ? '#1899d6' : 'var(--fg)',
                   }}
                 >
@@ -646,7 +692,31 @@ export default function Play() {
     return (
       <Shell dim={0.45}>
         <div className="anim-in flex min-h-[80dvh] flex-col items-center justify-center text-center">
-          <Mascot gender={gender} kid={quiz.kids} mood="happy" size={150} />
+          <div className="relative flex items-end justify-center gap-1">
+            <Mascot gender={gender} kid={quiz.kids} mood="happy" size={150} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/saif-5.png"
+              alt=""
+              aria-hidden
+              className="slide-in-side h-[170px] w-auto select-none"
+              style={{ ['--side' as string]: lang === 'ar' ? '-1' : '1', animationDelay: '120ms', filter: 'drop-shadow(0 10px 14px rgba(30,50,80,0.28))' }}
+              draggable={false}
+            />
+            <span className="absolute bottom-6 left-1/2 -translate-x-1/2">
+              <span
+                className="stamp block whitespace-nowrap rounded-2xl border-4 px-4 py-1.5 text-base font-black"
+                style={{
+                  borderColor: level.color,
+                  color: level.color,
+                  background: 'rgba(255,255,255,0.94)',
+                  boxShadow: 'var(--shadow)',
+                }}
+              >
+                {lang === 'ar' ? level.ar : level.en} ✓
+              </span>
+            </span>
+          </div>
           <p className="pixel ink mt-6 text-lg text-[var(--gold-dark)] sm:text-2xl" dir="ltr">
             STAGE CLEAR
           </p>
@@ -690,6 +760,7 @@ export default function Play() {
                 'radial-gradient(circle at 50% 40%, rgba(255,207,63,0.30) 0%, rgba(12,26,50,0.66) 36%, rgba(7,16,34,0.94) 100%)',
             }}
           />
+          <span aria-hidden className="rays pointer-events-none" style={{ zIndex: -4 }} />
           <p className="count-in text-7xl" style={{ color: '#ffcf3f', filter: 'drop-shadow(0 6px 22px rgba(255,207,63,0.55))' }}>
             ★
           </p>
@@ -727,13 +798,23 @@ export default function Play() {
               <Mascot gender={gender} kid={quiz.kids} mood="ko" size={140} />
             </div>
             <p className="pixel ink mt-3 text-xl text-[var(--red-dark)] sm:text-3xl" dir="ltr">
-              GAME OVER
+              {quiz.kids ? 'MISSION PAUSED' : 'GAME OVER'}
             </p>
             <h1 className="ink mt-4 text-xl font-black">{timedOut ? s.timeUp : s.wrongAnswer}</h1>
             <p className="ink-sm mx-auto mt-3 max-w-md text-xs font-bold leading-7">
-              {s.keepLearning}
+              {quiz.kids
+                ? lang === 'ar'
+                  ? 'لا بأس! اكتشفت فخاً جديداً — والآن تعرف كيف تتجنّبه.'
+                  : "That's okay! You found a new trap — now you know how to dodge it."
+                : s.keepLearning}
             </p>
           </Panel>
+
+          {lesson && (
+            <div className="mt-3">
+              <LessonCard lesson={lesson} lang={lang} saif={false} />
+            </div>
+          )}
 
           <div className="mt-3 grid grid-cols-2 gap-3">
             <Stat label={s.yourScore} value={`${score} / ${quiz.total}`} />
@@ -801,6 +882,17 @@ export default function Play() {
               {copy.explanation}
             </p>
           </Panel>
+
+          {unlocked > 0 && (
+            <Panel tone="green" className="anim-in mt-3 px-4 py-3 text-center">
+              <span className="ink-sm text-sm font-black">
+                🔓{' '}
+                {lang === 'ar'
+                  ? `فتحتَ ${unlocked} ${unlocked === 1 ? 'درساً جديداً' : 'دروس جديدة'} في خريطة الإتقان`
+                  : `You unlocked ${unlocked} new lesson${unlocked === 1 ? '' : 's'} on your mastery map`}
+              </span>
+            </Panel>
+          )}
 
           <div className="mt-5 space-y-2">
             <PixelButton size="lg" className="w-full" onClick={begin}>
@@ -898,6 +990,13 @@ export default function Play() {
         />
       )}
       <div className="flex flex-1 flex-col">
+        <p role="status" aria-live="polite" className="sr-only">
+          {lock === 'pending'
+            ? lang === 'ar' ? 'جارٍ التحقق من إجابتك' : 'Checking your answer'
+            : lock === 'wrong'
+              ? `${s.wrongAnswer}. ${lang === 'ar' ? 'الإجابة الصحيحة' : 'Correct answer'}: ${copy.options[q.correct]}`
+              : revealed ? s.correct : ''}
+        </p>
         {/* HUD */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -977,38 +1076,59 @@ export default function Play() {
           </Panel>
         )}
 
+        {scenario && (
+          <div className="anim-in mt-3" key={`sc-${q.n}`}>
+            <IncidentArtifact scenario={scenario} lang={lang} revealed={revealed || lock === 'wrong'} compact />
+          </div>
+        )}
+
         <Panel tone="dark" className="anim-in mt-3 p-5" key={q.n}>
           <h1 className="ink-sm text-base font-black leading-9 sm:text-lg sm:leading-10">
             {copy.text}
           </h1>
+          {quiz.kids && (
+            <div className="mt-3">
+              <ReadAloud
+                lang={lang}
+                active={!revealed && !lock}
+                text={`${copy.text} ${ord.map((oi, di) => `${letters[di]}: ${copy.options[oi]}`).join('. ')}`}
+              />
+            </div>
+          )}
         </Panel>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-2" key={`opts-${q.n}`}>
           {ord.map((oi, di) => {
             const opt = copy.options[oi];
             const picked = selected === di;
-            const correct = revealed && oi === q.correct;
+            const showCorrect = (revealed || lock === 'wrong') && oi === q.correct;
+            const wrongPick = lock === 'wrong' && picked;
+            const faded = lock === 'wrong' && !picked && oi !== q.correct;
+            const fx = wrongPick ? 'sink' : showCorrect && lock === 'wrong' ? 'glow-in' : picked && lock === 'pending' ? 'lock-pulse' : '';
             return (
               <button
                 key={oi}
-                disabled={revealed}
+                disabled={revealed || !!lock}
                 data-testid="option"
+                data-correct={showCorrect || undefined}
                 aria-pressed={picked}
                 onClick={() => {
                   sfx.select();
                   setSelected(di);
                 }}
-                className="pxl flex w-full items-start gap-3 px-3.5 py-3.5 text-start text-sm font-bold leading-8 transition-transform active:scale-[0.99]"
+                className={`pxl opt-in flex w-full items-start gap-3 px-3.5 py-3.5 text-start text-sm font-bold leading-8 transition-[transform,opacity] duration-200 active:scale-[0.98] ${fx}`}
                 style={{
-                  background: correct ? '#dff4e8' : picked ? '#e8f1ff' : '#ffffff',
-                  border: `2px solid ${correct ? '#63c894' : picked ? '#79aef0' : 'var(--line)'}`,
+                  animationDelay: fx ? undefined : `${60 + di * 55}ms`,
+                  opacity: faded ? 0.4 : 1,
+                  background: showCorrect ? '#dff4e8' : wrongPick ? '#fdecec' : picked ? '#e8f1ff' : '#ffffff',
+                  border: `2px solid ${showCorrect ? '#63c894' : wrongPick ? '#ef9a9a' : picked ? '#79aef0' : 'var(--line)'}`,
                 }}
               >
                 <span
                   className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-black"
                   style={{
-                    background: correct ? 'var(--green)' : picked ? 'var(--gold)' : 'var(--night-2)',
-                    color: correct ? '#fff' : picked ? '#4a3300' : 'var(--fg-muted)',
+                    background: showCorrect ? 'var(--green)' : wrongPick ? 'var(--red)' : picked ? 'var(--gold)' : 'var(--night-2)',
+                    color: showCorrect || wrongPick ? '#fff' : picked ? '#4a3300' : 'var(--fg-muted)',
                   }}
                 >
                   {letters[di]}
@@ -1029,13 +1149,18 @@ export default function Play() {
               <p className="ink-sm mt-3 text-sm font-black leading-8">
                 {s.correct} {q.n === quiz.total ? s.winLine : s.wellDone}
               </p>
-              <p className="ink-sm mt-3 text-xs font-bold leading-8">{copy.explanation}</p>
+              {!lesson && <p className="ink-sm mt-3 text-xs font-bold leading-8">{copy.explanation}</p>}
             </Panel>
+            {lesson && (
+              <div className="mt-3">
+                <LessonCard lesson={lesson} lang={lang} explanation={copy.explanation} />
+              </div>
+            )}
             <PixelButton size="lg" className="mt-3 w-full" onClick={next}>
               {q.n === quiz.total ? s.showResult : s.nextQuestion}
             </PixelButton>
           </div>
-        ) : (
+        ) : lock === 'wrong' ? null : (
           <div
             className="sticky bottom-0 z-10 mt-auto pt-5"
             style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.94) 45%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
@@ -1044,11 +1169,11 @@ export default function Play() {
               size="lg"
               className="w-full"
               color={selected === null ? 'slate' : 'gold'}
-              disabled={selected === null}
+              disabled={selected === null || !!lock}
               onClick={confirm}
               sound="none"
             >
-              {selected === null ? s.pick : s.confirm}
+              {lock ? (lang === 'ar' ? 'جارٍ التحقق…' : 'Checking…') : selected === null ? s.pick : s.confirm}
             </PixelButton>
             <p className="ink-sm mt-3 text-center text-[11px] font-bold leading-6 text-[var(--fg-muted)]">
               {s.oneLife}

@@ -91,8 +91,8 @@ await p.keyboard.press(String(q1idx + 1));
 await p.waitForTimeout(140);
 if ((await p.getByTestId('option').nth(q1idx).getAttribute('aria-pressed')) !== 'true') note('keyboard select broken');
 await p.keyboard.press('Enter');
-await p.waitForTimeout(240);
-if (!(await p.locator('body').innerText()).includes('إجابة صحيحة!')) note('Enter confirm broken');
+// التأكيد يمرّ بلحظة تشويق قصيرة قبل الحكم
+await p.getByText('إجابة صحيحة!').first().waitFor({ timeout: 3000 }).catch(() => note('Enter confirm broken'));
 const muteBtn = p.getByRole('button', { name: 'الصوت' });
 await muteBtn.click(); await p.waitForTimeout(100);
 if ((await muteBtn.innerText()) !== 'OFF') note('mute toggle broken');
@@ -136,7 +136,8 @@ await p.getByRole('button', { name: 'مراجعة كل الأسئلة' }).click(
 await p.waitForTimeout(250);
 await p.getByRole('button', { name: 'إعادة المحاولة' }).click();
 await playAdultRound({ wrongAt: 16 });
-await p.waitForTimeout(200);
+// بعد الخطأ تُعرض الإجابة الصحيحة في مكانها لحظةً ثم شاشة الخسارة
+await p.getByText('GAME OVER').waitFor({ timeout: 5000 }).catch(() => note('lost screen never appeared'));
 const lost = await p.locator('body').innerText();
 if (!lost.includes(`15 / ${ADULT_TOTAL}`)) note('loss score wrong');
 if (!lost.includes('شهادة تقدير')) note('reward at 15 wrong');

@@ -195,8 +195,88 @@ body {
 }
 .word-pop { display: inline-block; animation: word-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
+/* ============ إحساس اللعب — المرحلة الثانية ============ */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* تبديل حالة الشخصية بتلاشٍ ناعم */
+@keyframes mood-in {
+  from { opacity: 0; transform: scale(0.96); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.mood-in { animation: mood-in 0.22s var(--ease-out) both; }
+
+/* دخول الخيارات بالتتابع */
+@keyframes opt-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.opt-in { animation: opt-in 0.28s var(--ease-out) both; }
+
+/* الخيار المختار أثناء لحظة التشويق */
+@keyframes lock-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 179, 1, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(245, 179, 1, 0); }
+}
+.lock-pulse { animation: lock-pulse 0.4s ease-out infinite; }
+
+/* الإجابة الخاطئة تهتز ثم تغوص قليلاً */
+@keyframes sink {
+  0% { transform: translateX(0); }
+  15% { transform: translateX(-7px); }
+  30% { transform: translateX(7px); }
+  45% { transform: translateX(-4px); }
+  60% { transform: translateX(0) scale(1); }
+  100% { transform: translateY(4px) scale(0.98); }
+}
+.sink { animation: sink 0.6s var(--ease-out) both; }
+
+/* الإجابة الصحيحة تُضاء في مكانها */
+@keyframes glow-in {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.025); }
+  100% { transform: scale(1); }
+}
+.glow-in { animation: glow-in 0.45s var(--ease-spring) both; }
+
+/* ختم الرتبة عند اجتياز المرحلة */
+@keyframes stamp {
+  0% { opacity: 0; transform: scale(1.6) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(0.94) rotate(-6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-6deg); }
+}
+.stamp { animation: stamp 0.5s var(--ease-spring) 0.25s both; }
+
+/* ضابط يدخل المشهد من الجانب */
+@keyframes slide-in-side {
+  from { opacity: 0; transform: translateX(calc(var(--side, 1) * 40px)); }
+  to { opacity: 1; transform: none; }
+}
+.slide-in-side { animation: slide-in-side 0.45s var(--ease-out) both; }
+
+/* أشعة الضوء للسؤال الذهبي */
+@keyframes spin-slow { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.rays {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  width: 160vmax;
+  height: 160vmax;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, rgba(255, 207, 63, 0.16) 0deg 8deg, rgba(255, 207, 63, 0) 8deg 20deg);
+  mask-image: radial-gradient(circle, #000 0%, transparent 55%);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 55%);
+  animation: spin-slow 24s linear infinite;
+}
+
+/* بطاقة الدرس: الحيلة ← التصرف الآمن ← تذكّر */
+.lesson-row { animation: fade-up 0.34s var(--ease-out) both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .anim-in, .pulse, .shake, .bob, .blink, .flash-red, .count-pop, .count-in { animation: none !important; }
+  .anim-in, .pulse, .shake, .bob, .blink, .flash-red, .count-pop, .count-in,
+  .mood-in, .opt-in, .lock-pulse, .sink, .glow-in, .stamp, .slide-in-side, .rays, .lesson-row { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
 
