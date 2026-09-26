@@ -171,7 +171,7 @@ export default function Play() {
   useEffect(() => {
     if (phase !== 'brief') return;
     // حمّل الوقفات مسبقاً
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 5; i++) {
       const img = new window.Image();
       img.src = `/art/saif-${i}.png`;
     }
@@ -183,7 +183,7 @@ export default function Play() {
   }, [phase, briefWords, briefDone]);
   useEffect(() => {
     if (phase !== 'brief' || briefDone) return;
-    const speaking = [1, 2, 4, 3, 5];
+    const speaking = [4, 3, 2, 1, 5];
     const t = setInterval(() => {
       setBriefPose((p_) => speaking[(speaking.indexOf(p_) + 1) % speaking.length] ?? 2);
     }, 1200);
@@ -340,8 +340,24 @@ export default function Play() {
             if (!briefDone) setBriefWords(briefTotal);
           }}
         >
-          {/* فقاعة الحديث */}
-          <div className="relative mt-2">
+          {/* مساحة حرة تكشف مبنى القيادة كاملاً */}
+          <div className="flex-1" />
+
+          {/* سيف على يمين الشاشة */}
+          <div className="pointer-events-none relative z-0 -mb-6 flex [direction:ltr] justify-end pe-1 landscape:-me-28 sm:pe-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              key={briefDone ? 3 : briefPose}
+              src={`/art/saif-${briefDone ? 3 : briefPose}.png`}
+              alt={s.briefName}
+              className="anim-in w-auto select-none portrait:h-[min(31dvh,300px)] landscape:h-[min(44dvh,410px)]"
+              draggable={false}
+              style={{ filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))' }}
+            />
+          </div>
+
+          {/* صندوق الحوار أسفل الشاشة */}
+          <div className="relative z-10">
             <div
               className="rounded-3xl px-4 py-3 sm:px-5 sm:py-4"
               style={{ background: '#ffffff', border: '2px solid var(--line)', boxShadow: 'var(--shadow)' }}
@@ -366,22 +382,10 @@ export default function Play() {
                 </p>
               )}
             </div>
+            {/* ذيل يشير لأعلى نحو سيف */}
             <span
-              className="absolute -bottom-[10px] start-1/2 h-5 w-5 -translate-x-1/2 rotate-45"
-              style={{ background: '#fff', borderInlineEnd: '2px solid var(--line)', borderBottom: '2px solid var(--line)' }}
-            />
-          </div>
-
-          {/* الضابط — رأسه تحت ذيل الفقاعة مباشرة ليخرج الكلام من فمه */}
-          <div className="relative -mt-2 flex flex-1 items-end justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              key={briefDone ? 6 : briefPose}
-              src={`/art/saif-${briefDone ? 6 : briefPose}.png`}
-              alt={s.briefName}
-              className="anim-in w-auto select-none portrait:h-[min(36dvh,340px)] landscape:h-[min(46dvh,430px)]"
-              draggable={false}
-              style={{ filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))' }}
+              className="absolute -top-[10px] right-16 h-5 w-5 rotate-45 sm:right-24"
+              style={{ background: '#fff', borderTop: '2px solid var(--line)', borderLeft: '2px solid var(--line)' }}
             />
           </div>
 
