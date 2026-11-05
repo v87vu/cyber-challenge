@@ -521,12 +521,20 @@ export default function Play() {
       setPhase('gender');
     };
     return (
-      <div className="anim-in fixed inset-0 z-50" style={{ background: '#04101f' }}>
+      <div
+        className="anim-in fixed inset-0 z-50 flex items-center justify-center"
+        style={{
+          background: '#04101f',
+          padding:
+            'max(2.6rem, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))',
+        }}
+      >
         <video
           ref={videoRef}
           data-testid="intro-video"
           src={quiz.kids ? '/videos/intro-kids.mp4' : '/videos/intro-adult.mp4'}
-          className="h-full w-full object-contain"
+          className="max-h-full max-w-full rounded-xl"
+          style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.16), 0 18px 50px rgba(0,0,0,0.55)' }}
           playsInline
           preload="auto"
           onEnded={endVideo}
