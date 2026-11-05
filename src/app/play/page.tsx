@@ -14,7 +14,7 @@ import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } 
 import { AGE_GROUPS, setAge, setGender, type AgeGroup, type Gender } from '@/lib/prefs';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
-type Phase = 'brief' | 'gender' | 'age' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
+type Phase = 'brief' | 'gender' | 'age' | 'video' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
 
 const TIME = 45;
 const COUNT_FROM = 3;
@@ -49,6 +49,8 @@ export default function Play() {
   // ترتيب عرض الخيارات لكل سؤال — يتجدد عشوائياً في كل جولة
   const [order, setOrder] = useState<number[][]>([]);
   const [agePick, setAgePick] = useState<AgeGroup | null>(null);
+  const [videoTap, setVideoTap] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const mute = useSyncExternalStore(subscribeMuted, mutedSnapshot, mutedServerSnapshot);
   const revealRef = useRef<HTMLDivElement>(null);
@@ -133,6 +135,12 @@ export default function Play() {
     setNewBest(false);
     setPhase('countdown');
   }, [quiz]);
+
+  // تشغيل الفيديو التوعوي تلقائياً — وإن منعه المتصفح نعرض زر التشغيل
+  useEffect(() => {
+    if (phase !== 'video') return;
+    videoRef.current?.play().catch(() => setVideoTap(true));
+  }, [phase]);
 
   // العدّ التنازلي قبل السؤال الأول
   useEffect(() => {
@@ -488,7 +496,8 @@ export default function Play() {
                 if (agePick === null) return;
                 setAge(agePick);
                 sfx.confirm();
-                setPhase('gender');
+                setVideoTap(false);
+                setPhase('video');
               }}
               className="w-full rounded-2xl px-6 py-4 text-lg font-black uppercase tracking-wide transition-transform active:translate-y-[3px] disabled:cursor-not-allowed"
               style={{
@@ -500,6 +509,67 @@ export default function Play() {
               {s.continue}
             </button>
           </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  /* --------------------------------------- فيديو توعوي حسب الفئة العمرية */
+  if (phase === 'video') {
+    const endVideo = () => {
+      sfx.confirm();
+      setPhase('gender');
+    };
+    return (
+      <Shell dim={0.35}>
+        <div className="anim-in flex min-h-[92dvh] w-full flex-col items-center justify-center">
+          <p className="ink-sm text-center text-sm font-black text-[var(--fg-muted)]">
+            🎬 {s.videoTitle}
+          </p>
+          <div
+            className="relative mt-4 w-full overflow-hidden rounded-3xl"
+            style={{ border: '2px solid var(--line)', boxShadow: 'var(--shadow)', background: '#0b1526' }}
+          >
+            <video
+              ref={videoRef}
+              data-testid="intro-video"
+              src={quiz.kids ? '/videos/intro-kids.mp4' : '/videos/intro-adult.mp4'}
+              className="block aspect-video w-full"
+              playsInline
+              preload="auto"
+              onEnded={endVideo}
+              onPlay={() => setVideoTap(false)}
+              onClick={(e) => {
+                const v = e.currentTarget;
+                if (v.paused) v.play().catch(() => setVideoTap(true));
+                else v.pause();
+              }}
+            />
+            {videoTap && (
+              <button
+                onClick={() => videoRef.current?.play().catch(() => {})}
+                aria-label={s.videoTap}
+                className="absolute inset-0 grid place-items-center"
+                style={{ background: 'rgba(8, 18, 36, 0.45)' }}
+              >
+                <span
+                  className="grid h-20 w-20 place-items-center rounded-full pb-1 ps-1 text-3xl"
+                  style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
+                >
+                  ▶
+                </span>
+                <span className="absolute bottom-5 text-sm font-black text-white">{s.videoTap}</span>
+              </button>
+            )}
+          </div>
+          <button
+            data-testid="video-skip"
+            onClick={endVideo}
+            className="mt-6 w-full max-w-md rounded-2xl px-6 py-3.5 text-base font-black transition-transform active:translate-y-[3px]"
+            style={{ background: '#ffffff', color: 'var(--fg-muted)', border: '2px solid var(--line)', borderBottomWidth: 4 }}
+          >
+            {s.videoSkip}
+          </button>
         </div>
       </Shell>
     );

@@ -30,13 +30,24 @@ export const passBrief = async (page) => {
   await page.waitForTimeout(250);
 };
 
+/** بعد اختيار العمر يظهر فيديو توعوي — تحقّق من مصدره الصحيح ثم تخطَّ */
+export const skipVideo = async (page, kids = false) => {
+  const vid = page.getByTestId('intro-video');
+  await vid.waitFor({ timeout: 8000 });
+  const src = await vid.getAttribute('src');
+  const want = kids ? 'intro-kids.mp4' : 'intro-adult.mp4';
+  if (!src?.includes(want)) throw new Error(`intro video src=${src}, expected ${want}`);
+  await page.getByTestId('video-skip').click();
+  await page.waitForTimeout(250);
+};
+
 export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'متابعة' }).click();
-  await page.waitForTimeout(250);
+  await skipVideo(page, bracket.startsWith('12'));
 };
 export const pickAgeEn = async (page, bracket = '18–24 years') => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.waitForTimeout(250);
+  await skipVideo(page, bracket.startsWith('12'));
 };
