@@ -81,6 +81,14 @@ for (const [name, w, h] of VIEWPORTS) {
   await cont.click();
   await p.waitForTimeout(250);
 
+  /* الفيديو التوعوي */
+  await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
+  await noHScroll(p, name, 'video');
+  const skipBtn = p.getByTestId('video-skip');
+  await inView(p, skipBtn, 'video skip', name);
+  await skipBtn.click();
+  await p.waitForTimeout(250);
+
   /* النوع */
   await noHScroll(p, name, 'gender');
   await inView(p, p.getByText('ذكر', { exact: true }), 'gender card', name);
