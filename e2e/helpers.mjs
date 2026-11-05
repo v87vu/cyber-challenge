@@ -31,11 +31,11 @@ export const passBrief = async (page) => {
 };
 
 /** بعد اختيار العمر يظهر فيديو توعوي بلا زر تخطٍّ — تحقّق من مصدره ثم اقفز لقرب نهايته ليُطلق onEnded */
-export const skipVideo = async (page, kids = false) => {
+export const skipVideo = async (page, kids = false, en = false) => {
   const vid = page.getByTestId('intro-video');
   await vid.waitFor({ timeout: 8000 });
   const src = await vid.getAttribute('src');
-  const want = kids ? 'intro-kids.mp4' : 'intro-adult.mp4';
+  const want = `intro-${kids ? 'kids' : 'adult'}${en ? '-en' : ''}.mp4`;
   if (!src?.includes(want)) throw new Error(`intro video src=${src}, expected ${want}`);
   await vid.evaluate(async (v) => {
     if (!isFinite(v.duration)) {
@@ -57,5 +57,5 @@ export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
 export const pickAgeEn = async (page, bracket = '18–24 years') => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await skipVideo(page, bracket.startsWith('12'));
+  await skipVideo(page, bracket.startsWith('12'), true);
 };
