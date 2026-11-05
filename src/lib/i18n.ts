@@ -24,7 +24,6 @@ const AR = (g: Gender) => {
     onbAgeHint: 'يساعدنا هذا في تحسين التجربة وإعداد التقارير.',
     videoTitle: f ? 'شاهدي هذه الرسالة التوعوية قبل أن نبدأ' : 'شاهد هذه الرسالة التوعوية قبل أن نبدأ',
     videoTap: 'اضغط للتشغيل',
-    videoSkip: 'تخطي الفيديو',
     ageGroups: [
       '12–17 سنة',
       '18–24 سنة',
@@ -168,7 +167,6 @@ const EN = () => ({
   onbAgeHint: 'This helps us improve the experience and reporting.',
   videoTitle: 'Watch this awareness message before we start',
   videoTap: 'Tap to play',
-  videoSkip: 'Skip video',
   ageGroups: [
     '12–17 years',
     '18–24 years',

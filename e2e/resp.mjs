@@ -1,5 +1,6 @@
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import { mkdirSync } from 'fs';
+import { skipVideo } from './helpers.mjs';
 const S = new URL('./shots/resp/', import.meta.url).pathname;
 mkdirSync(S, { recursive: true });
 const BASE = process.env.BASE || 'http://localhost:3001';
@@ -81,13 +82,11 @@ for (const [name, w, h] of VIEWPORTS) {
   await cont.click();
   await p.waitForTimeout(250);
 
-  /* الفيديو التوعوي */
+  /* الفيديو التوعوي — ملء الشاشة بلا تخطٍّ */
   await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
   await noHScroll(p, name, 'video');
-  const skipBtn = p.getByTestId('video-skip');
-  await inView(p, skipBtn, 'video skip', name);
-  await skipBtn.click();
-  await p.waitForTimeout(250);
+  await inView(p, p.getByTestId('intro-video'), 'intro video', name);
+  await skipVideo(p);
 
   /* النوع */
   await noHScroll(p, name, 'gender');

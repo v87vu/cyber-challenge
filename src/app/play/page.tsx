@@ -514,64 +514,57 @@ export default function Play() {
     );
   }
 
-  /* --------------------------------------- فيديو توعوي حسب الفئة العمرية */
+  /* ------------- فيديو توعوي حسب الفئة العمرية — ملء الشاشة، بلا تخطٍّ */
   if (phase === 'video') {
     const endVideo = () => {
       sfx.confirm();
       setPhase('gender');
     };
     return (
-      <Shell dim={0.35}>
-        <div className="anim-in flex min-h-[92dvh] w-full flex-col items-center justify-center">
-          <p className="ink-sm text-center text-sm font-black text-[var(--fg-muted)]">
-            🎬 {s.videoTitle}
-          </p>
-          <div
-            className="relative mt-4 w-full overflow-hidden rounded-3xl"
-            style={{ border: '2px solid var(--line)', boxShadow: 'var(--shadow)', background: '#0b1526' }}
-          >
-            <video
-              ref={videoRef}
-              data-testid="intro-video"
-              src={quiz.kids ? '/videos/intro-kids.mp4' : '/videos/intro-adult.mp4'}
-              className="block aspect-video w-full"
-              playsInline
-              preload="auto"
-              onEnded={endVideo}
-              onPlay={() => setVideoTap(false)}
-              onClick={(e) => {
-                const v = e.currentTarget;
-                if (v.paused) v.play().catch(() => setVideoTap(true));
-                else v.pause();
-              }}
-            />
-            {videoTap && (
-              <button
-                onClick={() => videoRef.current?.play().catch(() => {})}
-                aria-label={s.videoTap}
-                className="absolute inset-0 grid place-items-center"
-                style={{ background: 'rgba(8, 18, 36, 0.45)' }}
-              >
-                <span
-                  className="grid h-20 w-20 place-items-center rounded-full pb-1 ps-1 text-3xl"
-                  style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
-                >
-                  ▶
-                </span>
-                <span className="absolute bottom-5 text-sm font-black text-white">{s.videoTap}</span>
-              </button>
-            )}
-          </div>
+      <div className="anim-in fixed inset-0 z-50" style={{ background: '#04101f' }}>
+        <video
+          ref={videoRef}
+          data-testid="intro-video"
+          src={quiz.kids ? '/videos/intro-kids.mp4' : '/videos/intro-adult.mp4'}
+          className="h-full w-full object-contain"
+          playsInline
+          preload="auto"
+          onEnded={endVideo}
+          onError={endVideo}
+          onPlay={() => setVideoTap(false)}
+          onClick={(e) => {
+            const v = e.currentTarget;
+            if (v.paused) v.play().catch(() => setVideoTap(true));
+            else v.pause();
+          }}
+        />
+        <p
+          className="pointer-events-none absolute inset-x-0 px-6 text-center text-sm font-black sm:text-base"
+          style={{
+            top: 'max(0.9rem, env(safe-area-inset-top))',
+            color: 'rgba(255,255,255,0.92)',
+            textShadow: '0 1px 8px rgba(0,0,0,0.65)',
+          }}
+        >
+          🎬 {s.videoTitle}
+        </p>
+        {videoTap && (
           <button
-            data-testid="video-skip"
-            onClick={endVideo}
-            className="mt-6 w-full max-w-md rounded-2xl px-6 py-3.5 text-base font-black transition-transform active:translate-y-[3px]"
-            style={{ background: '#ffffff', color: 'var(--fg-muted)', border: '2px solid var(--line)', borderBottomWidth: 4 }}
+            onClick={() => videoRef.current?.play().catch(() => {})}
+            aria-label={s.videoTap}
+            className="absolute inset-0 grid place-items-center"
+            style={{ background: 'rgba(4, 16, 31, 0.45)' }}
           >
-            {s.videoSkip}
+            <span
+              className="grid h-20 w-20 place-items-center rounded-full pb-1 ps-1 text-3xl"
+              style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
+            >
+              ▶
+            </span>
+            <span className="absolute bottom-8 text-sm font-black text-white">{s.videoTap}</span>
           </button>
-        </div>
-      </Shell>
+        )}
+      </div>
     );
   }
 
