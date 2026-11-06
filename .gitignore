@@ -141,3 +141,8 @@ _council/
 .claude/settings.local.json
 setup-admin.sh
 .dbpassword.local
+
+# local secrets / setup scripts
+move-db.sh
+.env*.local*
+.env.local.old-shared-backup
