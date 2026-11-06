@@ -47,3 +47,23 @@ create index if not exists answer_attempts_game_idx on public.answer_attempts (g
 
 alter table public.game_sessions enable row level security;
 alter table public.answer_attempts enable row level security;
+
+-- إحصائيات الأسئلة للوحة الإدارة (يُحسب من محاولات الإجابة)
+create or replace view public.question_statistics as
+select
+  quiz_type,
+  question_number,
+  count(distinct player_id) as players_answered,
+  count(*) filter (where not is_correct) as wrong_attempts,
+  count(distinct player_id) filter (where attempt_number = 1 and is_correct) as first_try_correct_players,
+  round(
+    100.0 * count(distinct player_id) filter (where attempt_number = 1 and is_correct)
+    / greatest(count(distinct player_id), 1), 1
+  ) as first_try_success_rate
+from public.answer_attempts
+group by quiz_type, question_number;
+
+-- الوصول عبر مفتاح الخدمة فقط — لا قراءة عامة
+revoke all on public.question_statistics from anon, authenticated;
+revoke all on public.game_sessions from anon, authenticated;
+revoke all on public.answer_attempts from anon, authenticated;
