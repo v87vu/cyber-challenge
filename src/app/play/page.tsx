@@ -728,7 +728,7 @@ export default function Play() {
 
           <div
             className="sticky bottom-0 mt-auto pt-6"
-            style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.92) 40%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
             <button
               disabled={agePick === null}
@@ -1734,7 +1734,7 @@ export default function Play() {
           </div>
           <div
             className="sticky bottom-0 z-10 pt-3"
-            style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.94) 45%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
             <PixelButton size="lg" className="w-full" onClick={next}>
               {q.n === quiz.total ? s.showResult : s.nextQuestion}
@@ -1744,7 +1744,7 @@ export default function Play() {
         ) : (
           <div
             className="quiz-confirm sticky bottom-0 z-10 mt-auto pt-5"
-            style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.94) 45%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
             <PixelButton
               size="lg"
