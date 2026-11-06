@@ -15,12 +15,12 @@ import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } 
 import { AGE_GROUPS, setAge, setEmail, setGender, setName, type AgeGroup, type Gender } from '@/lib/prefs';
 import ScamScene from '@/components/ScamScene';
 import ShieldMap from '@/components/ShieldMap';
-import { levelLocation } from '@/lib/locations';
+import { levelLocation, transitionClip } from '@/lib/locations';
 import { getScene } from '@/lib/scenes';
 import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars, type FoundFlags } from '@/lib/stars';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
-type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey' | 'certificate';
+type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'transition' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey' | 'certificate';
 
 type AnswerAttempt = {
   questionNumber: number;
@@ -96,6 +96,10 @@ export default function Play() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoTap, setVideoTap] = useState(false);
   const introVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [transitionSrc, setTransitionSrc] = useState<string | null>(null);
+  const [transitionTap, setTransitionTap] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const transitionVideoRef = useRef<HTMLVideoElement | null>(null);
   const [fraudExperience, setFraudExperience] = useState<'yes' | 'no' | null>(null);
   const [fraudDetails, setFraudDetails] = useState('');
   const [extortionExperience, setExtortionExperience] = useState<'yes' | 'no' | null>(null);
@@ -133,6 +137,7 @@ export default function Play() {
   const correctDisplay = ord.indexOf(q.correct);
   const level = quizLevelOf(quiz, q.n);
   const nextLevel = quiz.levels[quiz.levels.findIndex((item) => item.id === level.id) + 1];
+  const nextTransitionClip = nextLevel ? transitionClip(mode, level.id, nextLevel.id) : null;
   const letters = LETTERS[lang];
   const isGolden = q.n === quiz.golden;
   const isExpertFinal = level.id === 6;
@@ -206,12 +211,15 @@ export default function Play() {
 
   const advance = useCallback(() => {
     const nextIdx = idx + 1;
+    const nextQuestion = quiz.questions[nextIdx];
+    const clip = nextQuestion ? transitionClip(mode, level.id, quizLevelOf(quiz, nextQuestion.n).id) : null;
     setIdx(nextIdx);
     setSelected(null);
     setWrongAttempt(false);
     setLeft(TIME);
-    setPhase(quiz.questions[nextIdx]?.n === quiz.golden ? 'golden' : 'question');
-  }, [idx, quiz]);
+    setTransitionSrc(clip);
+    setPhase(clip ? 'transition' : nextQuestion?.n === quiz.golden ? 'golden' : 'question');
+  }, [idx, quiz, mode, level.id]);
 
   const confirm = useCallback(() => {
     if (phase !== 'question' || selected === null) return;
@@ -346,6 +354,28 @@ export default function Play() {
     setPhase('briefing');
   }, []);
 
+  const finishTransition = useCallback(() => {
+    setTransitionTap(false);
+    setPhase(q.n === quiz.golden ? 'golden' : 'question');
+  }, [q.n, quiz.golden]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'transition') return;
+    if (reducedMotion) {
+      const timeout = setTimeout(finishTransition, 1200);
+      return () => clearTimeout(timeout);
+    }
+    transitionVideoRef.current?.play().catch(() => setTransitionTap(true));
+  }, [phase, reducedMotion, finishTransition]);
+
   // تشغيل الفيديو التوعوي المحلي تلقائياً — وإن منعه المتصفح نعرض زر التشغيل
   useEffect(() => {
     if (phase !== 'video') return;
@@ -448,11 +478,14 @@ export default function Play() {
         if (e.key === 'Enter') confirm();
       } else if (phase === 'correct' && e.key === 'Enter') next();
       else if (phase === 'milestone' && e.key === 'Enter') advance();
-      else if (phase === 'golden' && (e.key === 'Enter' || e.key === ' ')) setPhase('question');
+      else if (phase === 'transition' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        finishTransition();
+      } else if (phase === 'golden' && (e.key === 'Enter' || e.key === ' ')) setPhase('question');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, confirm, next, advance]);
+  }, [phase, confirm, next, advance, finishTransition]);
 
   const MenuBtn = (
     <Link
@@ -1215,6 +1248,68 @@ export default function Play() {
     );
   }
 
+  /* ---------------------------------------------------------- فيديو الانتقال */
+  if (phase === 'transition' && transitionSrc) {
+    return (
+      <div
+        data-testid="level-transition"
+        dir="rtl"
+        className="fixed inset-0 z-50 overflow-hidden bg-[#06101e] text-white"
+      >
+        {!reducedMotion && (
+          <video
+            ref={transitionVideoRef}
+            src={transitionSrc}
+            className="transition-video h-full w-full"
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            onEnded={finishTransition}
+            onError={finishTransition}
+            onPlay={() => setTransitionTap(false)}
+            aria-label="المرحلة التالية"
+          />
+        )}
+
+        {reducedMotion ? (
+          <div className="absolute inset-0 grid place-items-center p-6">
+            <div className="rounded-3xl border border-white/20 bg-white/10 px-8 py-6 text-center shadow-2xl backdrop-blur-md">
+              <p className="text-lg font-black">المرحلة التالية</p>
+              <div className="mt-4 inline-flex"><Chip color={level.color}>{level[lang]}</Chip></div>
+            </div>
+          </div>
+        ) : (
+          <div className="transition-overlay pointer-events-none absolute inset-x-0 top-0 px-5 pb-16 pt-8 text-center">
+            <p className="text-lg font-black drop-shadow-md">المرحلة التالية</p>
+            <div className="mt-3 inline-flex"><Chip color={level.color}>{level[lang]}</Chip></div>
+          </div>
+        )}
+
+        {transitionTap && !reducedMotion && (
+          <button
+            type="button"
+            className="absolute inset-0 z-10 grid place-items-center bg-black/30"
+            onClick={() => transitionVideoRef.current?.play().catch(() => setTransitionTap(true))}
+            aria-label="تشغيل فيديو الانتقال"
+          >
+            <span className="grid h-20 w-20 place-items-center rounded-full bg-white/90 ps-1 text-3xl text-[#06101e] shadow-2xl">▶</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          data-testid="transition-skip"
+          onClick={finishTransition}
+          className="absolute end-4 z-20 min-h-11 min-w-11 rounded-full border border-white/30 bg-black/55 px-4 py-2 text-sm font-black text-white"
+          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
+          تخطي ⟵
+        </button>
+      </div>
+    );
+  }
+
   /* ---------------------------------------------------------- شاشة الانتقال */
   if (phase === 'milestone') {
     return (
@@ -1464,6 +1559,9 @@ export default function Play() {
 
   return (
     <Shell dim={0.68} location={levelLocation(mode, level.id)} nextLocation={nextLevel ? levelLocation(mode, nextLevel.id) : undefined}>
+      {q.n === level.to && nextTransitionClip && (
+        <video hidden aria-hidden="true" muted playsInline preload="auto" src={nextTransitionClip} />
+      )}
       <div className="quiz-play flex flex-1 flex-col" data-revealed={revealed}>
         {/* HUD */}
         <div className="flex items-center justify-between gap-2">

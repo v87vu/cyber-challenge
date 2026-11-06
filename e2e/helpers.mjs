@@ -50,7 +50,7 @@ export const startGame = async (page) => {
 };
 
 /* إجابة صحيحة واحدة مع تجاوز شاشات الإنجاز والسؤال الذهبي */
-export const answerCorrect = async (page, text) => {
+export const answerCorrect = async (page, text, skipTransition = true) => {
   await page.getByTestId('option').first().waitFor({ timeout: 15000 });
   await page.getByTestId('option').filter({ hasText: text }).first().click();
   const confirm = page.getByRole('button', { name: /تأكيد|Confirm/ }).first();
@@ -60,7 +60,11 @@ export const answerCorrect = async (page, text) => {
   if (await next.isVisible().catch(() => false)) await next.click();
   const cont = page.getByRole('button', { name: /متابعة|Continue/ }).first();
   if (await cont.isVisible().catch(() => false)) await cont.click().catch(() => {});
-  await page.keyboard.press('Enter').catch(() => {});
+  if (skipTransition) {
+    const transitionSkip = page.getByTestId('transition-skip');
+    if (await transitionSkip.isVisible().catch(() => false)) await transitionSkip.click();
+    await page.keyboard.press('Enter').catch(() => {});
+  }
   await page.waitForTimeout(300);
 };
 

@@ -1,5 +1,6 @@
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import { mkdirSync } from 'fs';
+import { fastForwardVideo } from './helpers.mjs';
 const S = new URL('./shots/resp/', import.meta.url).pathname;
 mkdirSync(S, { recursive: true });
 const BASE = process.env.BASE || 'http://localhost:3001';
@@ -74,6 +75,12 @@ for (const [name, w, h] of VIEWPORTS) {
   await cont.click();
   await p.waitForTimeout(250);
 
+  /* الفيديو التوعوي بعد اختيار العمر */
+  await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
+  await noHScroll(p, name, 'video');
+  await inView(p, p.getByTestId('intro-video'), 'intro video', name);
+  await fastForwardVideo(p, false);
+
   /* تمهيد سيف */
   const briefCta = p.getByRole('button', { name: /هيا لنبدأ/ });
   await briefCta.waitFor({ timeout: 8000 });
@@ -82,16 +89,11 @@ for (const [name, w, h] of VIEWPORTS) {
   await briefCta.click();
   await p.waitForTimeout(250);
 
-  /* النوع + بيانات اللاعب */
+  /* النوع — بلا أي بيانات شخصية */
   await noHScroll(p, name, 'gender');
   await inView(p, p.getByText('ذكر', { exact: true }), 'gender card', name);
+  if (await p.locator('input').count()) note(`${name}: input fields shown before the game`);
   await p.getByText('ذكر', { exact: true }).click();
-  await p.locator('input').first().fill('لاعب تجريبي');
-  // نموذج التسجيل طويل بطبيعته — الوصول للزر بالتمرير مقبول على الشاشات الصغيرة
-  const regCont = p.getByRole('button', { name: /متابعة/ }).last();
-  await regCont.scrollIntoViewIfNeeded();
-  await inView(p, regCont, 'register continue', name);
-  await regCont.click();
   await p.waitForTimeout(400);
 
   /* البداية */

@@ -28,7 +28,17 @@ await passOnboardingAr(page);
 ok('onboarding: age → video → briefing → gender');
 await startGame(page);
 let q1Order = await page.getByTestId('option').allInnerTexts();
-for (let n = 1; n <= ADULT_TOTAL; n++) await answerCorrect(page, AR_CORRECT[n - 1]);
+for (let n = 1; n <= ADULT_TOTAL; n++) {
+  await answerCorrect(page, AR_CORRECT[n - 1], n !== 5);
+  if (n === 5) {
+    const transition = page.getByTestId('level-transition');
+    await transition.waitFor({ timeout: 3000 });
+    const src = await transition.locator('video').getAttribute('src');
+    if (src?.includes('t1-home-park')) ok('adult Q5 → t1-home-park transition');
+    else bad(`adult Q5 transition src=${src}`);
+    await page.getByTestId('transition-skip').click();
+  }
+}
 await page.waitForTimeout(1200);
 let body = await page.locator('main').innerText();
 if (body.includes(`${ADULT_TOTAL} / ${ADULT_TOTAL}`) && body.includes('بطل الوعي الرقمي')) ok('22/22 → بطل الوعي الرقمي');
