@@ -12,7 +12,7 @@ import Certificate from '@/components/Certificate';
 import AiReviewChat, { type ReviewMistake } from '@/components/AiReviewChat';
 import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
-import { AGE_GROUPS, setAge, setEmail, setGender, setName, setPhone, type AgeGroup, type Gender } from '@/lib/prefs';
+import { AGE_GROUPS, setAge, setEmail, setGender, setName, type AgeGroup, type Gender } from '@/lib/prefs';
 import ScamScene from '@/components/ScamScene';
 import ShieldMap from '@/components/ShieldMap';
 import { levelLocation } from '@/lib/locations';
@@ -20,7 +20,7 @@ import { getScene } from '@/lib/scenes';
 import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars, type FoundFlags } from '@/lib/stars';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
-type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey';
+type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey' | 'certificate';
 
 type AnswerAttempt = {
   questionNumber: number;
@@ -64,7 +64,7 @@ function devicePlayerId() {
 }
 
 export default function Play() {
-  const { gender, lang, age, name: playerName, email: playerEmail, phone: playerPhone, s } = usePrefs();
+  const { gender, lang, age, name: playerName, email: playerEmail, s } = usePrefs();
   const quiz = age === '12-17' ? QUIZ_KIDS : QUIZ_ADULT;
   const MS = age === '12-17' ? KIDS_MILESTONES : MILESTONES;
   const ageLabel = age ? s.ageGroups[AGE_GROUPS.indexOf(age)] : '';
@@ -88,14 +88,12 @@ export default function Play() {
   const [agePick, setAgePick] = useState<AgeGroup | null>(null);
   const [nameInput, setNameInput] = useState(playerName);
   const [emailInput, setEmailInput] = useState(playerEmail);
-  const [phoneInput, setPhoneInput] = useState(playerPhone);
   const [attempts, setAttempts] = useState<AnswerAttempt[]>([]);
   const [wrongAttempt, setWrongAttempt] = useState(false);
   const [foundFlags, setFoundFlags] = useState<FoundFlags>({});
   const [reviewComplete, setReviewComplete] = useState(false);
   const [videoComplete, setVideoComplete] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
-  const [videoError, setVideoError] = useState(false);
   const [videoTap, setVideoTap] = useState(false);
   const introVideoRef = useRef<HTMLVideoElement | null>(null);
   const [fraudExperience, setFraudExperience] = useState<'yes' | 'no' | null>(null);
@@ -109,9 +107,7 @@ export default function Play() {
   const gameIdRef = useRef('');
   const registeredNameRef = useRef('');
   const registeredEmailRef = useRef('');
-  const registeredPhoneRef = useRef('');
   const gameStartedAt = useRef(0);
-  const analyticsSent = useRef(false);
   const bestPair = useSyncExternalStore(subscribeBest, bestSnapshot, bestServerSnapshot);
   const best = quiz.kids ? bestPair.kids : bestPair.adult;
   const mode = quiz.kids ? 'kids' : 'adult';
@@ -275,7 +271,6 @@ export default function Play() {
     } = {}) => {
       const savedName = registeredNameRef.current.trim() || playerName.trim();
       const savedEmail = registeredEmailRef.current.trim() || playerEmail.trim();
-      const savedPhone = registeredPhoneRef.current.trim() || playerPhone.trim();
 
       if (
         !age ||
@@ -293,7 +288,7 @@ export default function Play() {
         gameId: gameIdRef.current,
         playerName: savedName,
         playerEmail: savedEmail,
-        playerPhone: savedPhone,
+        playerPhone: '',
         lang,
         ageGroup: age,
         gender,
@@ -337,55 +332,18 @@ export default function Play() {
       console.error('Game state save failed after retries:', lastError);
       throw lastError instanceof Error ? lastError : new Error('Game state save failed');
     },
-    [age, gender, playerName, playerEmail, playerPhone, lang, quiz.kids, quiz.total, idx, attempts],
+    [age, gender, playerName, playerEmail, lang, quiz.kids, quiz.total, idx, attempts],
   );
-
-  useEffect(() => {
-    if (
-      phase !== 'survey' ||
-      !age ||
-      !gender ||
-      !gameIdRef.current ||
-      (fraudExperience === null && extortionExperience === null)
-    ) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void saveGameState({
-        completed: true,
-        fraudExperience,
-        fraudDetails: fraudExperience === 'yes' ? fraudDetails : '',
-        extortionExperience,
-        extortionDetails: extortionExperience === 'yes' ? extortionDetails : '',
-      }).catch((error) => {
-        console.error('Survey autosave failed:', error);
-      });
-    }, 500);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    phase,
-    age,
-    gender,
-    fraudExperience,
-    fraudDetails,
-    extortionExperience,
-    extortionDetails,
-    saveGameState,
-  ]);
 
   const finishReview = useCallback(() => {
     setReviewComplete(true);
-    setPhase('video');
+    setPhase('survey');
   }, []);
 
   const finishVideo = useCallback(() => {
-    setVideoError(false);
     setVideoComplete(true);
     setVideoProgress(100);
-    setPhase('survey');
-    sfx.win();
+    setPhase('briefing');
   }, []);
 
   // تشغيل الفيديو التوعوي المحلي تلقائياً — وإن منعه المتصفح نعرض زر التشغيل
@@ -394,56 +352,11 @@ export default function Play() {
     introVideoRef.current?.play().catch(() => setVideoTap(true));
   }, [phase]);
 
-  const failVideo = useCallback(() => {
-    setVideoError(true);
-  }, []);
-
   const begin = useCallback(() => {
-    const savedName = registeredNameRef.current.trim() || nameInput.trim() || playerName.trim();
-    const savedEmail = registeredEmailRef.current.trim() || emailInput.trim() || playerEmail.trim();
-    const savedPhone = registeredPhoneRef.current.trim() || phoneInput.trim() || playerPhone.trim();
-
-    registeredNameRef.current = savedName;
-    registeredEmailRef.current = savedEmail;
-    registeredPhoneRef.current = savedPhone;
-
     if (!playerIdRef.current) playerIdRef.current = devicePlayerId();
-    if (!gameIdRef.current) {
-      gameIdRef.current = crypto.randomUUID();
-    }
+    if (!gameIdRef.current) gameIdRef.current = crypto.randomUUID();
     gameStartedAt.current = Date.now();
-    analyticsSent.current = false;
 
-    if (age && gender && savedName && (!savedEmail || validEmail(savedEmail))) {
-      void fetch('/api/game-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        cache: 'no-store',
-        body: JSON.stringify({
-          playerId: playerIdRef.current,
-          gameId: gameIdRef.current,
-          playerName: savedName,
-          playerEmail: savedEmail,
-          playerPhone: savedPhone,
-          lang,
-          ageGroup: age,
-          gender,
-          quizType: quiz.kids ? 'kids' : 'adult',
-          score: 0,
-          total: quiz.total,
-          durationSeconds: 0,
-          completed: false,
-          attempts: [],
-        }),
-      }).then(async (response) => {
-        if (!response.ok) {
-          console.error('Initial player save failed:', response.status, await response.text().catch(() => ''));
-        }
-      }).catch((error) => {
-        console.error('Initial player save failed:', error);
-      });
-    }
     setOrder(quiz.questions.map(() => shuffled()));
     setIdx(0);
     setSelected(null);
@@ -453,7 +366,6 @@ export default function Play() {
     setReviewComplete(false);
     setVideoComplete(false);
     setVideoProgress(0);
-    setVideoError(false);
     setFraudExperience(null);
     setFraudDetails('');
     setExtortionExperience(null);
@@ -463,18 +375,7 @@ export default function Play() {
     setCount(COUNT_FROM);
     setNewBest(false);
     setPhase('countdown');
-  }, [age, gender, lang, emailInput, nameInput, phoneInput, playerEmail, playerName, playerPhone, quiz]);
-
-  // يحفظ اكتمال الجولة فورًا مع إعادة المحاولة عند تعذر الحفظ مؤقتًا.
-  useEffect(() => {
-    if (phase !== 'won' || analyticsSent.current || !age || !gender || !gameIdRef.current) return;
-    analyticsSent.current = true;
-
-    void saveGameState({ completed: true }).catch((error) => {
-      console.error('Completed game save failed:', error);
-      analyticsSent.current = false;
-    });
-  }, [phase, age, gender, saveGameState]);
+  }, [quiz]);
 
   // يبدأ حساب وقت المحاولة عند ظهور السؤال، ويحفظ السجل مؤقتاً للمراجعة والتقارير.
   useEffect(() => {
@@ -692,6 +593,7 @@ export default function Play() {
                   onClick={() => {
                     setGender(g);
                     sfx.select();
+                    setPhase('intro');
                   }}
                   className="pxl flex flex-col items-center gap-3 px-3 pb-4 pt-6 transition-transform active:scale-[0.98]"
                   style={{ background: gender === g ? '#eefaf3' : '#ffffff' }}
@@ -706,160 +608,6 @@ export default function Play() {
                 </button>
               );
             })}
-          </div>
-
-          <div
-            className="mt-6 w-full max-w-md rounded-2xl px-4 py-3 text-center"
-            style={{
-              background: 'rgba(255,255,255,0.94)',
-              border: '2px solid #e0a21a',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
-            <p className="ink text-base font-black leading-7 text-[var(--gold-dark)]">
-              {lang === 'ar'
-                ? 'أدخل بياناتك للحصول على الشهادة'
-                : lang === 'ur'
-                  ? 'سرٹیفکیٹ حاصل کرنے کے لیے اپنی معلومات درج کریں'
-                  : 'Enter your details to receive your certificate'}
-            </p>
-            <p className="ink-sm mt-1 text-xs font-bold leading-6 text-[var(--fg-muted)]">
-              {lang === 'ar'
-                ? 'الاسم إجباري، أما البريد الإلكتروني ورقم الهاتف فاختياريان. إذا رغبتم في استلام الشهادة عبر البريد الإلكتروني، يرجى إدخال بريدكم الإلكتروني.'
-                : lang === 'ur'
-                  ? 'نام لازمی ہے۔ ای میل اور فون نمبر اختیاری ہیں۔ اگر آپ سرٹیفکیٹ ای میل پر چاہتے ہیں تو اپنا ای میل درج کریں۔'
-                  : 'Name is required. Email and phone number are optional. If you want the certificate sent by email, enter your email address.'}
-            </p>
-          </div>
-
-          <div className="mt-4 w-full max-w-md space-y-3 text-start">
-            <label className="block">
-              <span className="ink-sm mb-1 block text-xs font-black">
-                {lang === 'ar' ? 'الاسم الكامل *' : lang === 'ur' ? 'پورا نام *' : 'Full name *'}
-              </span>
-              <input
-                value={nameInput}
-                onChange={(event) => setNameInput(event.target.value)}
-                maxLength={120}
-                autoComplete="name"
-                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
-                placeholder={lang === 'ar' ? 'اكتب اسمك الكامل' : lang === 'ur' ? 'اپنا پورا نام لکھیں' : 'Enter your full name'}
-              />
-            </label>
-
-            <label className="block">
-              <span className="ink-sm mb-1 block text-xs font-black">
-                {lang === 'ar' ? 'البريد الإلكتروني (اختياري)' : lang === 'ur' ? 'ای میل (اختیاری)' : 'Email (optional)'}
-              </span>
-              <input
-                value={emailInput}
-                onChange={(event) => setEmailInput(event.target.value)}
-                maxLength={180}
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                dir="ltr"
-                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
-                placeholder="name@example.com"
-              />
-            </label>
-
-            {emailInput.trim() && !validEmail(emailInput) && (
-              <p className="ink-sm text-xs font-black text-red-700">
-                {lang === 'ar'
-                  ? 'تأكد من كتابة البريد الإلكتروني بشكل صحيح.'
-                  : lang === 'ur'
-                    ? 'براہ کرم درست ای میل درج کریں۔'
-                    : 'Please enter a valid email address.'}
-              </p>
-            )}
-
-            <label className="block">
-              <span className="ink-sm mb-1 block text-xs font-black">
-                {lang === 'ar'
-                  ? 'رقم الهاتف (اختياري)'
-                  : lang === 'ur'
-                    ? 'فون نمبر (اختیاری)'
-                    : 'Phone number (optional)'}
-              </span>
-              <input
-                value={phoneInput}
-                onChange={(event) => setPhoneInput(event.target.value)}
-                maxLength={40}
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                dir="ltr"
-                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
-                placeholder={lang === 'ar' ? '05xxxxxxxxx' : '+971 5X XXX XXXX'}
-              />
-            </label>
-
-            <PixelButton
-              size="lg"
-              className="w-full"
-              disabled={!gender || !nameInput.trim() || Boolean(emailInput.trim() && !validEmail(emailInput))}
-              onClick={async () => {
-                const savedName = nameInput.trim();
-                const savedEmail = emailInput.trim();
-                const savedPhone = phoneInput.trim();
-
-                if (!savedName || !age || !gender) return;
-                if (savedEmail && !validEmail(savedEmail)) return;
-
-                registeredNameRef.current = savedName;
-                registeredEmailRef.current = savedEmail;
-                registeredPhoneRef.current = savedPhone;
-
-                playerIdRef.current = devicePlayerId();
-                gameIdRef.current = crypto.randomUUID();
-                gameStartedAt.current = Date.now();
-
-                setName(savedName);
-                setEmail(savedEmail);
-                setPhone(savedPhone);
-
-                try {
-                  const response = await fetch('/api/game-results', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    cache: 'no-store',
-                    body: JSON.stringify({
-                      playerId: playerIdRef.current,
-                      gameId: gameIdRef.current,
-                      playerName: savedName,
-                      playerEmail: savedEmail,
-                      playerPhone: savedPhone,
-                      lang,
-                      ageGroup: age,
-                      gender,
-                      quizType: quiz.kids ? 'kids' : 'adult',
-                      score: 0,
-                      total: quiz.total,
-                      durationSeconds: 0,
-                      completed: false,
-                      certificateRequested: false,
-                      certificateSent: false,
-                      attempts: [],
-                    }),
-                  });
-
-                  if (!response.ok) {
-                    // تعذُّر الحفظ (قاعدة بيانات غير مهيأة أو شبكة متقطعة) لا يمنع اللعب
-                    const detail = await response.text().catch(() => '');
-                    console.warn('Registration save skipped:', response.status, detail);
-                  }
-                } catch (error) {
-                  console.warn('Registration save skipped:', error);
-                }
-
-                sfx.confirm();
-                setPhase('intro');
-              }}
-            >
-              {lang === 'ar' ? 'متابعة' : lang === 'ur' ? 'جاری رکھیں' : 'Continue'}
-            </PixelButton>
-
           </div>
 
           <div className="mt-8">{MenuLink}</div>
@@ -919,8 +667,10 @@ export default function Play() {
                   className="rounded-2xl px-3 py-3.5 text-start text-sm font-black transition-transform active:scale-[0.98]"
                   style={{
                     background: active ? '#ddf4ff' : '#ffffff',
-                    border: `2px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
-                    borderBottomWidth: 4,
+                    borderTop: `2px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
+                    borderRight: `2px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
+                    borderBottom: `4px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
+                    borderLeft: `2px solid ${active ? '#1cb0f6' : 'var(--line)'}`,
                     color: active ? '#1899d6' : 'var(--fg)',
                   }}
                 >
@@ -939,8 +689,11 @@ export default function Play() {
               onClick={() => {
                 if (agePick === null) return;
                 setAge(agePick);
+                setVideoComplete(false);
+                setVideoProgress(0);
+                setVideoTap(false);
                 sfx.confirm();
-                setPhase('briefing');
+                setPhase('video');
               }}
               className="w-full rounded-2xl px-6 py-4 text-lg font-black uppercase tracking-wide transition-transform active:translate-y-[3px] disabled:cursor-not-allowed"
               style={{
@@ -1098,10 +851,10 @@ export default function Play() {
           <Panel tone="gold" className="mt-4 p-4 text-center">
             <p className="ink-sm text-sm font-black leading-7">
               {lang === 'ar'
-                ? `هذا الفيديو مخصص للفئة العمرية ${ageLabel}. شاهده كاملًا لفتح الشهادة.`
+                ? `هذا الفيديو مخصص للفئة العمرية ${ageLabel}. شاهده كاملًا للمتابعة.`
                 : lang === 'ur'
-                  ? `یہ ویڈیو ${ageLabel} عمر کے گروپ کے لیے ہے۔ سرٹیفکیٹ کھولنے کے لیے اسے مکمل دیکھیں۔`
-                  : `This video is for the ${ageLabel} age group. Watch it fully to unlock your certificate.`}
+                  ? `یہ ویڈیو ${ageLabel} عمر کے گروپ کے لیے ہے۔ جاری رکھنے کے لیے اسے مکمل دیکھیں۔`
+                  : `This video is for the ${ageLabel} age group. Watch it fully to continue.`}
             </p>
           </Panel>
 
@@ -1112,10 +865,11 @@ export default function Play() {
                 data-testid="intro-video"
                 src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
                 className="block aspect-video w-full"
+                autoPlay
                 playsInline
                 preload="auto"
                 onEnded={finishVideo}
-                onError={failVideo}
+                onError={finishVideo}
                 onPlay={() => setVideoTap(false)}
                 onTimeUpdate={(e) => {
                   const v = e.currentTarget;
@@ -1131,7 +885,7 @@ export default function Play() {
               />
               {videoTap && (
                 <button
-                  onClick={() => introVideoRef.current?.play().catch(() => {})}
+                  onClick={() => introVideoRef.current?.play().catch(() => setVideoTap(true))}
                   aria-label={lang === 'ar' ? 'اضغط للتشغيل' : lang === 'ur' ? 'چلانے کے لیے دبائیں' : 'Tap to play'}
                   className="absolute inset-0 grid place-items-center"
                   style={{ background: 'rgba(4, 16, 31, 0.45)' }}
@@ -1155,26 +909,16 @@ export default function Play() {
             <p className="ink-sm mt-2 text-center text-xs font-black text-[var(--fg-muted)]">
               {videoComplete
                 ? lang === 'ar'
-                  ? '✅ اكتملت المشاهدة. انتقل الآن إلى الأسئلة الأخيرة قبل الشهادة.'
+                  ? '✅ اكتملت المشاهدة.'
                   : lang === 'ur'
-                    ? '✅ ویڈیو مکمل ہو گئی۔ سرٹیفکیٹ سے پہلے آخری سوالات مکمل کریں۔'
-                    : '✅ Video complete. Please answer the final questions before receiving your certificate.'
+                    ? '✅ ویڈیو مکمل ہو گئی۔'
+                    : '✅ Video complete.'
                 : lang === 'ar'
                   ? `نسبة المشاهدة: ${videoProgress}%`
                   : lang === 'ur'
                     ? `دیکھنے کی پیش رفت: ${videoProgress}%`
                     : `Watched: ${videoProgress}%`}
             </p>
-
-            {videoError && (
-              <p className="ink-sm mt-3 text-center text-xs font-black text-red-700" role="alert">
-                {lang === 'ar'
-                  ? 'تعذر تشغيل الفيديو. تحقق من اتصال الإنترنت ثم أعد المحاولة.'
-                  : lang === 'ur'
-                    ? 'ویڈیو نہیں چل سکی۔ انٹرنیٹ چیک کر کے دوبارہ کوشش کریں۔'
-                    : 'The video could not play. Check the internet connection and try again.'}
-              </p>
-            )}
           </Panel>
 
           {!videoComplete && (
@@ -1191,12 +935,7 @@ export default function Play() {
                   : '🔒 Finish the video to continue'}
             </PixelButton>
           )}
-
-          <PixelButton size="md" className="mt-3 w-full" onClick={begin}>
-            {s.retry}
-          </PixelButton>
         </div>
-
       </Shell>
     );
   }
@@ -1340,25 +1079,10 @@ export default function Play() {
             color="green"
             className="mt-5 w-full"
             disabled={!surveyReady}
-            onClick={async () => {
+            onClick={() => {
               if (!surveyReady) return;
-
-              try {
-                await saveGameState({
-                  completed: true,
-                  certificateRequested: true,
-                  certificateSent: false,
-                  fraudExperience,
-                  fraudDetails,
-                  extortionExperience,
-                  extortionDetails,
-                });
-              } catch {
-                // لا نمنع اللاعب من الوصول للشهادة إذا تعذر حفظ الإحصائيات مؤقتًا.
-              }
-
-              setCert(true);
               sfx.confirm();
+              setPhase('certificate');
             }}
           >
             {lang === 'ar'
@@ -1367,6 +1091,105 @@ export default function Play() {
                 ? 'سرٹیفکیٹ کی طرف جاری رکھیں'
                 : 'Continue to certificate'}
           </PixelButton>
+        </div>
+      </Shell>
+    );
+  }
+
+  /* ------------------------------------------------ بيانات الشهادة في النهاية */
+  if (phase === 'certificate') {
+    return (
+      <Shell dim={0.55}>
+        <div className="anim-in mx-auto flex min-h-[80dvh] w-full max-w-md flex-col justify-center text-center">
+          <h1 className="ink text-3xl font-black text-[var(--gold-dark)]">
+            {lang === 'ar' ? 'احصل على شهادتك' : lang === 'ur' ? 'اپنا سرٹیفکیٹ حاصل کریں' : 'Get your certificate'}
+          </h1>
+          <p className="ink-sm mt-3 text-sm font-bold leading-7 text-[var(--fg-muted)]">
+            {lang === 'ar'
+              ? 'الاسم مطلوب لإنشاء الشهادة، والبريد الإلكتروني اختياري لإرسالها إليك.'
+              : lang === 'ur'
+                ? 'سرٹیفکیٹ بنانے کے لیے نام درکار ہے، اور بھیجنے کے لیے ای میل اختیاری ہے۔'
+                : 'Your name is required to create the certificate. Email is optional for delivery.'}
+          </p>
+
+          <div className="mt-6 space-y-3 text-start">
+            <label className="block">
+              <span className="ink-sm mb-1 block text-xs font-black">
+                {lang === 'ar' ? 'الاسم الكامل *' : lang === 'ur' ? 'پورا نام *' : 'Full name *'}
+              </span>
+              <input
+                value={nameInput}
+                onChange={(event) => setNameInput(event.target.value)}
+                maxLength={120}
+                autoComplete="name"
+                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder={lang === 'ar' ? 'اكتب اسمك الكامل' : lang === 'ur' ? 'اپنا پورا نام لکھیں' : 'Enter your full name'}
+              />
+            </label>
+
+            <label className="block">
+              <span className="ink-sm mb-1 block text-xs font-black">
+                {lang === 'ar' ? 'البريد الإلكتروني (اختياري)' : lang === 'ur' ? 'ای میل (اختیاری)' : 'Email (optional)'}
+              </span>
+              <input
+                value={emailInput}
+                onChange={(event) => setEmailInput(event.target.value)}
+                maxLength={180}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                dir="ltr"
+                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder="name@example.com"
+              />
+            </label>
+
+            {emailInput.trim() && !validEmail(emailInput) && (
+              <p className="ink-sm text-xs font-black text-red-700" role="alert">
+                {lang === 'ar'
+                  ? 'تأكد من كتابة البريد الإلكتروني بشكل صحيح.'
+                  : lang === 'ur'
+                    ? 'براہ کرم درست ای میل درج کریں۔'
+                    : 'Please enter a valid email address.'}
+              </p>
+            )}
+
+            <PixelButton
+              size="lg"
+              className="w-full"
+              disabled={!nameInput.trim() || Boolean(emailInput.trim() && !validEmail(emailInput))}
+              onClick={() => {
+                const savedName = nameInput.trim();
+                const savedEmail = emailInput.trim();
+                if (!savedName || (savedEmail && !validEmail(savedEmail))) return;
+
+                registeredNameRef.current = savedName;
+                registeredEmailRef.current = savedEmail;
+                setName(savedName);
+                setEmail(savedEmail);
+                setCert(true);
+                sfx.confirm();
+
+                void saveGameState({
+                  completed: true,
+                  certificateRequested: true,
+                  certificateSent: false,
+                  fraudExperience,
+                  fraudDetails,
+                  extortionExperience,
+                  extortionDetails,
+                }).catch(() => {
+                  // فشل الحفظ لا يمنع إنشاء الشهادة.
+                });
+              }}
+            >
+              {lang === 'ar' ? 'إنشاء الشهادة' : lang === 'ur' ? 'سرٹیفکیٹ بنائیں' : 'Create certificate'}
+            </PixelButton>
+
+            <PixelButton size="md" color="slate" className="w-full" onClick={() => setPhase('intro')}>
+              {lang === 'ar' ? 'تخطي الشهادة' : lang === 'ur' ? 'سرٹیفکیٹ چھوڑ دیں' : 'Skip certificate'}
+            </PixelButton>
+          </div>
         </div>
 
         {cert && (
@@ -1384,7 +1207,7 @@ export default function Play() {
                 fraudDetails,
                 extortionExperience,
                 extortionDetails,
-              });
+              }).catch(() => {});
             }}
           />
         )}
@@ -1604,19 +1427,28 @@ export default function Play() {
           </Panel>
 
           <div className="mt-5 space-y-2">
-            <PixelButton size="lg" className="w-full" onClick={() => setPhase('review')}>
+            <PixelButton
+              size="lg"
+              className="w-full"
+              onClick={() => setPhase(reviewMistakes.length > 0 ? 'review' : 'survey')}
+            >
               {reviewMistakes.length > 0
                 ? lang === 'ar'
-                  ? 'مراجعة الأخطاء ثم مشاهدة الفيديو'
+                  ? 'مراجعة الأخطاء (اختياري)'
                   : lang === 'ur'
-                    ? 'غلطیوں کا جائزہ لیں، پھر ویڈیو دیکھیں'
-                    : 'Review mistakes, then watch the video'
+                    ? 'غلطیوں کا جائزہ (اختیاری)'
+                    : 'Review mistakes (optional)'
                 : lang === 'ar'
-                  ? 'متابعة لمشاهدة الفيديو'
+                  ? 'متابعة إلى الاستبيان'
                   : lang === 'ur'
-                    ? 'ویڈیو دیکھنے کے لیے جاری رکھیں'
-                    : 'Continue to the video'}
+                    ? 'سروے کی طرف جاری رکھیں'
+                    : 'Continue to the survey'}
             </PixelButton>
+            {reviewMistakes.length > 0 && (
+              <PixelButton size="md" color="slate" className="w-full" onClick={() => setPhase('survey')}>
+                {lang === 'ar' ? 'تخطي المراجعة' : lang === 'ur' ? 'جائزہ چھوڑ دیں' : 'Skip review'}
+              </PixelButton>
+            )}
             <PixelButton size="md" color="blue" className="w-full" onClick={share} sound="select">
               {copied ? s.copied : `📣 ${s.shareResult}`}
             </PixelButton>

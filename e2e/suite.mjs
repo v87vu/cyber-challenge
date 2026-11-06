@@ -1,11 +1,11 @@
-/* المجموعة الأساسية بعد دمج نسخة الجهة (2026-11-06):
-   العمر → تمهيد سيف → النوع+الاسم → اللعب → الفوز → الفيديو → الاستبيان → الشهادة.
+/* المجموعة الأساسية:
+   العمر → الفيديو → تمهيد سيف → النوع → اللعب → الفوز → الاستبيان → بيانات الشهادة.
    تعمل بلا أي مفاتيح بيئة (Supabase/Gemini/Resend) — أخطاء 503 متوقعة ومرشّحة.
    التشغيل: BASE=http://localhost:3100 node e2e/suite.mjs */
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import {
   AR_CORRECT, KIDS_AR, ADULT_TOTAL, KIDS_TOTAL,
-  passOnboardingAr, startGame, answerCorrect, fastForwardVideo,
+  passOnboardingAr, startGame, answerCorrect,
 } from './helpers.mjs';
 
 const BASE = process.env.BASE || 'http://localhost:3100';
@@ -25,7 +25,7 @@ let page = await ctx.newPage();
 watch(page);
 await page.goto(`${BASE}/play`);
 await passOnboardingAr(page);
-ok('onboarding: age → briefing → gender+name');
+ok('onboarding: age → video → briefing → gender');
 await startGame(page);
 let q1Order = await page.getByTestId('option').allInnerTexts();
 for (let n = 1; n <= ADULT_TOTAL; n++) await answerCorrect(page, AR_CORRECT[n - 1]);
@@ -34,17 +34,15 @@ let body = await page.locator('main').innerText();
 if (body.includes(`${ADULT_TOTAL} / ${ADULT_TOTAL}`) && body.includes('بطل الوعي الرقمي')) ok('22/22 → بطل الوعي الرقمي');
 else bad(`win screen wrong: ${body.slice(0, 120)}`);
 
-/* 3) الفوز → الفيديو (للبالغين) → الاستبيان → تنزيل الشهادة */
-await page.getByRole('button', { name: /الفيديو/ }).first().click();
-await fastForwardVideo(page, false);
-ok('post-win video: adult source, watched to the end');
+/* 3) الفوز → الاستبيان → إدخال الاسم في النهاية → تنزيل الشهادة */
+await page.getByRole('button', { name: /الاستبيان|الأسئلة/ }).first().click();
 const no = page.getByRole('button', { name: /^لا$/ });
 await no.nth(0).click();
 await no.nth(1).click();
-await page.getByRole('button', { name: /متابعة إلى الشهادة|الشهادة/ }).last().click();
-await page.waitForTimeout(1200);
+await page.getByRole('button', { name: /متابعة إلى الشهادة/ }).click();
+await page.locator('input[autocomplete="name"]').fill('لاعب تجريبي');
 const dl = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
-await page.getByRole('button', { name: /تحميل|شهاد/ }).first().click();
+await page.getByRole('button', { name: /إنشاء الشهادة/ }).click();
 const file = await dl;
 if (file && (await file.suggestedFilename()).includes('شهادة')) ok(`certificate PDF downloaded (${await file.suggestedFilename()})`);
 else bad('certificate download missing');
@@ -73,20 +71,21 @@ if (/02\/22/.test(body)) ok('advances after correcting the mistake');
 else bad(`no advance after correction: ${body.slice(0, 100)}`);
 await page.close();
 
-/* 5) وضع الأطفال 12–17: جولة كاملة + فيديو الأطفال */
+/* 5) وضع الأطفال 12–17: فيديو الأطفال أثناء الإعداد ثم جولة كاملة */
 page = await ctx.newPage();
 watch(page);
 await page.goto(`${BASE}/play`);
-await passOnboardingAr(page, { bracket: '12–17 سنة', name: 'طفل تجريبي' });
+await passOnboardingAr(page, { bracket: '12–17 سنة' });
+ok('kids video source correct during onboarding');
 await startGame(page);
 for (let n = 1; n <= KIDS_TOTAL; n++) await answerCorrect(page, KIDS_AR[n - 1]);
 await page.waitForTimeout(1200);
 body = await page.locator('main').innerText();
 if (body.includes(`${KIDS_TOTAL} / ${KIDS_TOTAL}`)) ok('kids 10/10 win');
 else bad(`kids win wrong: ${body.slice(0, 120)}`);
-await page.getByRole('button', { name: /الفيديو/ }).first().click();
-await fastForwardVideo(page, true);
-ok('kids video source correct');
+await page.getByRole('button', { name: /الاستبيان|الأسئلة/ }).first().click();
+await page.getByText('أسئلة أخيرة قبل الشهادة', { exact: true }).waitFor();
+ok('post-win flow goes directly to survey without video');
 await page.close();
 
 /* 6) الإنجليزية: الواجهة تتبدل */

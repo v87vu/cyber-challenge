@@ -34,15 +34,13 @@ export const pickAgeEn = async (page, bracket = '18–24 years') => {
   await page.waitForTimeout(250);
 };
 
-/* ——— التدفق المعتمد بعد دمج نسخة الجهة (2026-11-06) ———
-   العمر → تمهيد سيف (صوت تلقائي) → النوع + الاسم (إجباري) → البداية */
-export const passOnboardingAr = async (page, { bracket = '18–24 سنة', gender = 'ذكر', name = 'لاعب تجريبي' } = {}) => {
+/* ——— التدفق المعتمد: العمر → الفيديو → تمهيد سيف → النوع → البداية ——— */
+export const passOnboardingAr = async (page, { bracket = '18–24 سنة', gender = 'ذكر' } = {}) => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'متابعة' }).click();
+  await fastForwardVideo(page, bracket === '12–17 سنة');
   await page.getByRole('button', { name: /هيا لنبدأ/ }).click({ timeout: 8000 });
   await page.getByText(gender, { exact: true }).click();
-  await page.locator('input').first().fill(name);
-  await page.getByRole('button', { name: /متابعة/ }).last().click();
   await page.getByRole('button', { name: /ابدأ/ }).waitFor({ timeout: 8000 });
 };
 
@@ -66,7 +64,7 @@ export const answerCorrect = async (page, text) => {
   await page.waitForTimeout(300);
 };
 
-/* الفيديو التوعوي بعد الفوز: تحقّق من المصدر ثم اقفز لقرب النهاية */
+/* الفيديو التوعوي بعد اختيار العمر: تحقّق من المصدر ثم اقفز لقرب النهاية */
 export const fastForwardVideo = async (page, kids = false) => {
   const vid = page.getByTestId('intro-video');
   await vid.waitFor({ timeout: 10000 });
