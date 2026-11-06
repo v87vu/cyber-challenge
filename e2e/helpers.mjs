@@ -34,13 +34,12 @@ export const pickAgeEn = async (page, bracket = '18–24 years') => {
   await page.waitForTimeout(250);
 };
 
-/* ——— التدفق المعتمد: العمر → الفيديو → تمهيد سيف → النوع → البداية ——— */
+/* ——— التدفق المعتمد: العمر → الفيديو → النوع → البداية ——— */
 export const passOnboardingAr = async (page, { bracket = '18–24 سنة', gender = 'ذكر' } = {}) => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'متابعة' }).click();
   await fastForwardVideo(page, bracket === '12–17 سنة');
-  await page.getByRole('button', { name: /هيا لنبدأ/ }).click({ timeout: 8000 });
-  await page.getByText(gender, { exact: true }).click();
+  await page.getByText(gender, { exact: true }).click({ timeout: 8000 });
   await page.getByRole('button', { name: /ابدأ/ }).waitFor({ timeout: 8000 });
 };
 

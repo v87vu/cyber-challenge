@@ -351,7 +351,7 @@ export default function Play() {
   const finishVideo = useCallback(() => {
     setVideoComplete(true);
     setVideoProgress(100);
-    setPhase('briefing');
+    setPhase('gender');
   }, []);
 
   const finishTransition = useCallback(() => {

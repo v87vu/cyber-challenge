@@ -81,13 +81,7 @@ for (const [name, w, h] of VIEWPORTS) {
   await inView(p, p.getByTestId('intro-video'), 'intro video', name);
   await fastForwardVideo(p, false);
 
-  /* تمهيد سيف */
-  const briefCta = p.getByRole('button', { name: /هيا لنبدأ/ });
-  await briefCta.waitFor({ timeout: 8000 });
-  await noHScroll(p, name, 'briefing');
-  await inView(p, briefCta, 'briefing CTA', name);
-  await briefCta.click();
-  await p.waitForTimeout(250);
+  if (await p.getByRole('button', { name: /هيا لنبدأ/ }).isVisible().catch(() => false)) note(`${name}: briefing screen still shown`);
 
   /* النوع — بلا أي بيانات شخصية */
   await noHScroll(p, name, 'gender');
