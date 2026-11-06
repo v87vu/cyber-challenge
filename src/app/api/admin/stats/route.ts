@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseConfigured, supabaseRest } from '@/lib/supabaseAdmin';
+import { adminEmails } from '@/lib/adminEmails';
 
 async function authorized(request: Request) {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const allowedEmails = adminEmails();
   const authorization = request.headers.get('authorization');
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice('Bearer '.length).trim()
     : '';
 
-  if (!url || !serviceKey || !adminEmail || !token) return false;
+  if (!url || !serviceKey || !allowedEmails.size || !token) return false;
 
   const supabase = createClient(url, serviceKey, {
     auth: {
@@ -20,7 +21,7 @@ async function authorized(request: Request) {
     },
   });
   const { data, error } = await supabase.auth.getUser(token);
-  return !error && data.user.email?.trim().toLowerCase() === adminEmail;
+  return !error && allowedEmails.has(data.user?.email?.trim().toLowerCase() ?? '');
 }
 
 export async function GET(request: Request) {

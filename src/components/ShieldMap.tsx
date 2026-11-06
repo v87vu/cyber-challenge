@@ -1,5 +1,5 @@
 import type { Lang, Level } from '@/lib/questions';
-import type { QuizType } from '@/lib/scenes';
+import type { QuizType } from '@/lib/stars';
 import { levelLocation, locationImage } from '../lib/locations';
 
 export default function ShieldMap({ levels, completedThrough, lang, mode = 'adult' }: { levels: Level[]; completedThrough: number; lang: Lang; mode?: QuizType }) {

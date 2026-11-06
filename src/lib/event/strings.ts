@@ -1,0 +1,32 @@
+export const eventStrings = {
+  ar: {
+    title: 'فعالية الوعي الرقمي', haveCode: 'لديك رمز فعالية؟', code: 'رمز الفعالية', enter: 'انضم إلى الفعالية',
+    presenter: 'ابدأ فعالية جماعية', unavailable: 'وضع الفعالية غير متاح', connecting: 'جارٍ الاتصال بالفعالية…',
+    unknown: 'الرمز غير معروف أو مقدم الفعالية غير متصل.', full: 'اكتملت الفعالية: الحد الأقصى ٢٠٠ لاعب.',
+    ended: 'انتهت الفعالية', finished: 'أكملت التحدي!', waiting: 'تابع النتائج على شاشة مقدم الفعالية.',
+    team: 'اختر فريقك', nickname: 'اسم مستعار', nicknameHint: 'استخدم اسماً مستعاراً فقط، حتى ١٦ حرفاً. لا تدخل اسمك الحقيقي أو بيانات التواصل.',
+    invalid: 'اختر فريقاً واسماً مستعاراً مناسباً من ١ إلى ١٦ حرفاً (دون أرقام أو رموز).',
+    privacy: 'تُشارك مع الفعالية فقط: الفريق والاسم المستعار ونتيجة اللعب والوقت.',
+    joining: 'جارٍ الانضمام…', home: 'العودة للرئيسية', score: 'الإجابات الصحيحة', seconds: 'ثانية', retry: 'إعادة الاتصال',
+  },
+  en: {
+    title: 'Digital awareness event', haveCode: 'Have an event code?', code: 'Event code', enter: 'Join event',
+    presenter: 'Start a team event', unavailable: 'Event mode unavailable', connecting: 'Connecting to the event…',
+    unknown: 'Unknown code or the presenter is offline.', full: 'This event is full: maximum 200 players.',
+    ended: 'The event has ended', finished: 'Challenge complete!', waiting: 'Follow the results on the presenter’s screen.',
+    team: 'Choose your team', nickname: 'Nickname', nicknameHint: 'Use a nickname only, up to 16 letters. Do not enter your real name or contact details.',
+    invalid: 'Choose a team and an appropriate nickname of 1–16 letters (no numbers or symbols).',
+    privacy: 'Only your team, nickname, quiz result and time are shared with this event.',
+    joining: 'Joining…', home: 'Back to home', score: 'Correct answers', seconds: 'seconds', retry: 'Reconnect',
+  },
+  ur: {
+    title: 'ڈیجیٹل آگاہی کی تقریب', haveCode: 'کیا آپ کے پاس تقریب کا کوڈ ہے؟', code: 'تقریب کا کوڈ', enter: 'تقریب میں شامل ہوں',
+    presenter: 'ٹیم کی تقریب شروع کریں', unavailable: 'تقریب کا موڈ دستیاب نہیں ہے', connecting: 'تقریب سے رابطہ ہو رہا ہے…',
+    unknown: 'کوڈ نامعلوم ہے یا منتظم آف لائن ہے۔', full: 'تقریب بھر گئی ہے: زیادہ سے زیادہ ۲۰۰ کھلاڑی۔',
+    ended: 'تقریب ختم ہو گئی', finished: 'چیلنج مکمل!', waiting: 'منتظم کی اسکرین پر نتائج دیکھیں۔',
+    team: 'اپنی ٹیم منتخب کریں', nickname: 'عرفی نام', nicknameHint: 'صرف عرفی نام استعمال کریں، زیادہ سے زیادہ ۱۶ حروف۔ اصل نام یا رابطے کی معلومات نہ لکھیں۔',
+    invalid: 'ٹیم اور ۱ سے ۱۶ حروف کا مناسب عرفی نام منتخب کریں (بغیر اعداد یا علامات)۔',
+    privacy: 'صرف ٹیم، عرفی نام، کھیل کا نتیجہ اور وقت تقریب کے ساتھ شیئر ہوتے ہیں۔',
+    joining: 'شامل ہو رہے ہیں…', home: 'مرکزی صفحے پر واپس', score: 'درست جوابات', seconds: 'سیکنڈ', retry: 'دوبارہ رابطہ کریں',
+  },
+} as const;

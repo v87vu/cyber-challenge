@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { adminEmails } from '@/lib/adminEmails';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -9,14 +10,14 @@ async function getAdminClientAndUser(request: Request) {
     process.env.SUPABASE_URL?.replace(/\/$/, '') ||
     process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const allowedEmails = adminEmails();
 
   const authorization = request.headers.get('authorization');
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice('Bearer '.length).trim()
     : '';
 
-  if (!url || !serviceKey || !adminEmail || !token) {
+  if (!url || !serviceKey || !allowedEmails.size || !token) {
     return { ok: false as const };
   }
 
@@ -31,7 +32,7 @@ async function getAdminClientAndUser(request: Request) {
   if (
     userError ||
     !userData.user ||
-    userData.user.email?.trim().toLowerCase() !== adminEmail
+    !allowedEmails.has(userData.user.email?.trim().toLowerCase() ?? '')
   ) {
     return { ok: false as const };
   }

@@ -114,7 +114,7 @@ const AR = (g: Gender) => {
     rank: 'اللقب',
 
     // المشاركة
-    shareResult: 'مشاركة النتيجة',
+    shareResult: 'شارك إنجازك',
     shareTextWin:
       'حصلت على لقب «بطل الوعي الرقمي» بالعلامة الكاملة في تحدي الوعي الرقمي! جرّبه بنفسك:',
     copied: 'تم نسخ الرابط ✓',
@@ -236,7 +236,7 @@ const EN = () => ({
   winLine: 'You proved that digital awareness is the first line of defence against cybercrime.',
   rank: 'Title',
 
-  shareResult: 'Share result',
+  shareResult: 'Share your achievement',
   shareTextWin:
     'I got a perfect score and earned the “Digital Awareness Champion” title! Try it yourself:',
   copied: 'Link copied ✓',
@@ -346,7 +346,7 @@ const UR = () => ({
   winLine: 'آپ نے ثابت کیا کہ ڈیجیٹل آگاہی سائبر جرائم کے خلاف پہلی دفاعی لائن ہے۔',
   rank: 'لقب',
 
-  shareResult: 'نتیجہ شیئر کریں',
+  shareResult: 'اپنی کامیابی شیئر کریں',
   shareTextWin: 'میں نے مکمل نمبر حاصل کر کے ”ڈیجیٹل آگاہی چیمپئن“ کا لقب جیتا! آپ بھی آزمائیں:',
   copied: 'لنک کاپی ہو گیا ✓',
 

@@ -1,8 +1,38 @@
 import { NextResponse } from 'next/server';
 import { supabaseConfigured, supabaseRest } from '@/lib/supabaseAdmin';
+import { createIpLimiter, InvalidPayload, isInteger, isRecord, isText, readJsonBody } from '@/lib/apiProtection';
 
 const LANGS = new Set(['ar', 'en', 'ur']);
 const AGE_GROUPS = new Set(['12-17', '18-24', '25-34', '35-44', '45-54', '55-64', '65-70', '70+']);
+const limitRequests = createIpLimiter(30, 60_000);
+
+function validResult(body: Record<string, unknown>) {
+  if (!safeId(body.playerId) || !safeId(body.gameId) ||
+    typeof body.lang !== 'string' || !LANGS.has(body.lang) ||
+    typeof body.ageGroup !== 'string' || !AGE_GROUPS.has(body.ageGroup) ||
+    (body.gender !== 'male' && body.gender !== 'female') ||
+    (body.quizType !== 'kids' && body.quizType !== 'adult') ||
+    !isInteger(body.total, 1, 50) || !isInteger(body.score, 0, body.total) ||
+    !isInteger(body.durationSeconds, 0, 86400) ||
+    !Array.isArray(body.attempts) || body.attempts.length > 250) return false;
+
+  for (const [key, max] of Object.entries({ playerName: 120, playerEmail: 180, playerPhone: 40, fraudDetails: 800, extortionDetails: 800 })) {
+    if (body[key] !== undefined && !isText(body[key], max)) return false;
+  }
+  if (typeof body.playerEmail === 'string' && body.playerEmail.trim() &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.playerEmail.trim())) return false;
+  for (const key of ['completed', 'certificateRequested', 'certificateSent']) {
+    if (body[key] !== undefined && typeof body[key] !== 'boolean') return false;
+  }
+  for (const key of ['fraudExperience', 'extortionExperience']) {
+    if (body[key] !== undefined && body[key] !== null && body[key] !== 'yes' && body[key] !== 'no') return false;
+  }
+  return body.attempts.every((attempt) => isRecord(attempt) &&
+    isInteger(attempt.questionNumber, 1, body.total as number) &&
+    (attempt.selectedOption === null || isInteger(attempt.selectedOption, 0, 3)) &&
+    isInteger(attempt.correctOption, 0, 3) && typeof attempt.isCorrect === 'boolean' &&
+    typeof attempt.timedOut === 'boolean' && isInteger(attempt.timeSpentSeconds, 0, 3600));
+}
 
 function safeId(value: unknown) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{8,80}$/.test(value) ? value : '';
@@ -18,16 +48,21 @@ function safeText(value: unknown, max: number) {
 }
 
 export async function POST(request: Request) {
+  const limited = limitRequests(request);
+  if (limited) return limited;
   if (!supabaseConfigured()) {
     return NextResponse.json({ saved: false, reason: 'not-configured' }, { status: 503 });
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request, 64 * 1024);
+    if (!validResult(body)) {
+      return NextResponse.json({ error: 'Invalid game result.' }, { status: 400 });
+    }
     const playerId = safeId(body.playerId);
     const gameId = safeId(body.gameId);
-    const lang = LANGS.has(body.lang) ? body.lang : 'ar';
-    const ageGroup = AGE_GROUPS.has(body.ageGroup) ? body.ageGroup : null;
+    const lang = body.lang as string;
+    const ageGroup = body.ageGroup as string;
     const gender = body.gender === 'male' || body.gender === 'female' ? body.gender : null;
     const quizType = body.quizType === 'kids' ? 'kids' : 'adult';
     const total = safeInt(body.total, 1, 50);
@@ -111,8 +146,7 @@ export async function POST(request: Request) {
       completed: existing?.completed === true || body.completed === true,
       certificate_requested:
         existing?.certificate_requested === true || body.certificateRequested === true,
-      certificate_sent:
-        existing?.certificate_sent === true || body.certificateSent === true,
+      // Only the email endpoint owns certificate_sent; a stale result must never reset it.
       fraud_experience:
         incomingFraud !== null ? incomingFraud : (existing?.fraud_experience ?? null),
       fraud_details:
@@ -171,7 +205,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       saved: true,
       player: {
         id: savedSession?.player_id ?? playerId,
@@ -180,7 +214,16 @@ export async function POST(request: Request) {
         phone: savedSession?.player_phone ?? null,
       },
     });
+    // Establish the game early: the unchanged certificate UI may open during the final save.
+    response.cookies.set('cyber-certificate-game', gameId, {
+      httpOnly: true, sameSite: 'strict', secure: new URL(request.url).protocol === 'https:',
+      path: '/api/send-certificate', maxAge: 24 * 60 * 60,
+    });
+    return response;
   } catch (error) {
+    if (error instanceof InvalidPayload) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Saving game analytics failed:', error);
     return NextResponse.json({ error: 'Unable to save game result.' }, { status: 502 });
   }

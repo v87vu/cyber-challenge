@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { LETTERS, getQuiz, questionCopy, quizCertificateTitle, quizLevelOf, quizRewardFor } from '@/lib/questions';
 import { KIDS_MILESTONES, MILESTONES } from '@/lib/i18n';
 import { usePrefs } from '@/lib/usePrefs';
@@ -9,17 +9,18 @@ import Shell from '@/components/Shell';
 import Mascot, { type Mood } from '@/components/Mascot';
 import Burst from '@/components/Burst';
 import Certificate from '@/components/Certificate';
+import EventPlayerGate, { useEventPlayer } from '@/components/event/EventPlayerGate';
 import AiReviewChat, { type ReviewMistake } from '@/components/AiReviewChat';
 import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
 import { AGE_GROUPS, setAge, setEmail, setGender, setName, type AgeGroup, type Gender } from '@/lib/prefs';
-import ScamScene from '@/components/ScamScene';
 import FillVideo, { VideoChrome } from '@/components/FillVideo';
 import ShieldMap from '@/components/ShieldMap';
 import { levelLocation, transitionClip } from '@/lib/locations';
-import { getScene } from '@/lib/scenes';
-import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars, type FoundFlags } from '@/lib/stars';
+import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars } from '@/lib/stars';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
+import { shareAchievement } from '@/lib/share-card';
+import { privacyCopy } from '@/lib/privacy';
 
 type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'transition' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey' | 'certificate';
 
@@ -64,7 +65,12 @@ function devicePlayerId() {
   }
 }
 
-export default function Play() {
+// EVENT MODE BRIDGE: keep event transport and privacy gates separate from quiz UI.
+export default function PlayPage() {
+  return <Suspense fallback={<Shell><p role="status">…</p></Shell>}><Play /></Suspense>;
+}
+
+function Play() {
   const { gender, lang, age, name: playerName, email: playerEmail, s } = usePrefs();
   const quiz = age === '12-17' ? QUIZ_KIDS : QUIZ_ADULT;
   const MS = age === '12-17' ? KIDS_MILESTONES : MILESTONES;
@@ -83,7 +89,6 @@ export default function Play() {
   const [count, setCount] = useState(COUNT_FROM);
   const [cert, setCert] = useState(false);
   const [newBest, setNewBest] = useState(false);
-  const [copied, setCopied] = useState(false);
   // ترتيب عرض الخيارات لكل سؤال — يتجدد عشوائياً في كل جولة
   const [order, setOrder] = useState<number[][]>([]);
   const [agePick, setAgePick] = useState<AgeGroup | null>(null);
@@ -91,7 +96,6 @@ export default function Play() {
   const [emailInput, setEmailInput] = useState(playerEmail);
   const [attempts, setAttempts] = useState<AnswerAttempt[]>([]);
   const [wrongAttempt, setWrongAttempt] = useState(false);
-  const [foundFlags, setFoundFlags] = useState<FoundFlags>({});
   const [reviewComplete, setReviewComplete] = useState(false);
   const [videoComplete, setVideoComplete] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -118,7 +122,12 @@ export default function Play() {
   const best = quiz.kids ? bestPair.kids : bestPair.adult;
   const mode = quiz.kids ? 'kids' : 'adult';
   const starBest = useSyncExternalStore(subscribeBestStars, bestStarsSnapshot, bestStarsServerSnapshot);
-  const rewards = summarizeStars(mode, attempts, foundFlags);
+  const rewards = summarizeStars(mode, attempts);
+
+  /* EVENT MODE BRIDGE — only aggregate progress leaves this browser. */
+  const eventCorrect = new Set(attempts.filter((attempt) => attempt.isCorrect).map((attempt) => attempt.questionNumber)).size;
+  const event = useEventPlayer(eventCorrect, phase === 'won', ['countdown', 'question', 'correct', 'milestone', 'transition', 'golden', 'won'].includes(phase));
+  /* END EVENT MODE BRIDGE */
 
   const briefingText =
     lang === 'ar'
@@ -129,12 +138,7 @@ export default function Play() {
 
   const q = quiz.questions[idx];
   const copy = questionCopy(q, lang);
-  const scene = getScene(mode, q.n);
-  const questionAttempts = attempts.filter((attempt) => attempt.questionNumber === q.n);
-  const findFlag = (id: string) => {
-    if (phase !== 'correct' || !scene.flags.some((flag) => flag.id === id)) return;
-    setFoundFlags((current) => current[q.n]?.includes(id) ? current : { ...current, [q.n]: [...(current[q.n] ?? []), id] });
-  };
+  const privacy = privacyCopy(lang);
   const ord = order[idx] ?? [0, 1, 2, 3];
   const correctDisplay = ord.indexOf(q.correct);
   const level = quizLevelOf(quiz, q.n);
@@ -252,22 +256,14 @@ export default function Play() {
   }, [q.n, advance, MS, quiz.total, quiz.kids, rewards.stars, mode]);
 
   const share = useCallback(async () => {
-    const text = s.shareTextWin;
-    const url = window.location.origin;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: s.appTitle, text, url });
-        return;
-      }
-    } catch {
-      return; // المستخدم ألغى المشاركة
-    }
-    try {
-      await navigator.clipboard.writeText(`${text} ${url}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  }, [s]);
+    await shareAchievement({
+      title: quizCertificateTitle(quiz, quiz.total)[lang],
+      score: quiz.total,
+      total: quiz.total,
+      stars: rewards.stars,
+      badges: rewards.badges.map((badge) => badge.icon),
+    });
+  }, [lang, quiz, rewards]);
 
   const saveGameState = useCallback(
     async (extra: {
@@ -279,7 +275,8 @@ export default function Play() {
       extortionExperience?: 'yes' | 'no' | null;
       extortionDetails?: string;
     } = {}) => {
-      if (typeof navigator !== 'undefined' && navigator.webdriver) return;
+      // EVENT MODE PRIVACY: no analytics, survey or identity persistence.
+      if (event.active || (typeof navigator !== 'undefined' && navigator.webdriver)) return;
 
       const savedName = registeredNameRef.current.trim();
       const savedEmail = registeredEmailRef.current.trim();
@@ -343,7 +340,7 @@ export default function Play() {
       console.error('Game state save failed after retries:', lastError);
       throw lastError instanceof Error ? lastError : new Error('Game state save failed');
     },
-    [age, gender, lang, quiz.kids, quiz.total, idx, attempts],
+    [age, gender, lang, quiz.kids, quiz.total, idx, attempts, event.active],
   );
 
   useEffect(() => {
@@ -394,7 +391,7 @@ export default function Play() {
   }, [phase]);
 
   const begin = useCallback(() => {
-    if (!playerIdRef.current) playerIdRef.current = devicePlayerId();
+    if (!event.active && !playerIdRef.current) playerIdRef.current = devicePlayerId(); // EVENT MODE: no device identity
     if (!gameIdRef.current) gameIdRef.current = 'v2-' + crypto.randomUUID();
     registeredNameRef.current = '';
     registeredEmailRef.current = '';
@@ -404,7 +401,6 @@ export default function Play() {
     setIdx(0);
     setSelected(null);
     setAttempts([]);
-    setFoundFlags({});
     setWrongAttempt(false);
     setReviewComplete(false);
     setVideoComplete(false);
@@ -418,7 +414,7 @@ export default function Play() {
     setCount(COUNT_FROM);
     setNewBest(false);
     setPhase('countdown');
-  }, [quiz]);
+  }, [quiz, event.active]);
 
   // يبدأ حساب وقت المحاولة عند ظهور السؤال، ويحفظ السجل مؤقتاً للمراجعة والتقارير.
   useEffect(() => {
@@ -533,6 +529,16 @@ export default function Play() {
       {lang !== 'en' && <span>{s.menu}</span>}
     </Link>
   );
+
+  /* EVENT MODE GATE — after age/gender, before video; replaces all personal-data end screens. */
+  if (event.active && (
+    event.status === 'ended' || event.info?.ended || event.player?.finished ||
+    ['won', 'survey', 'certificate', 'review'].includes(phase) ||
+    (!event.player && (!['age', 'gender'].includes(phase) || ['unavailable', 'unknown', 'full'].includes(event.status)))
+  )) {
+    return <EventPlayerGate event={event} total={quiz.total} complete={phase === 'won'} />;
+  }
+  /* END EVENT MODE GATE */
 
   /* ------------------------------------------------- اختيار النوع أولاً */
   /* ----------------------------------------- رسالة توعوية بعد اختيار العمر */
@@ -958,6 +964,9 @@ export default function Play() {
             </h1>
             {MenuBtn}
           </div>
+          <p className="ink-sm mt-2 text-xs font-bold leading-6 text-[var(--fg-muted)]">
+            {privacy.survey}
+          </p>
 
           <Panel tone="gold" className="mt-4 p-4 text-center">
             <p className="ink-sm text-sm font-black leading-7">
@@ -1109,12 +1118,13 @@ export default function Play() {
             {lang === 'ar' ? 'احصل على شهادتك' : lang === 'ur' ? 'اپنا سرٹیفکیٹ حاصل کریں' : 'Get your certificate'}
           </h1>
           <p className="ink-sm mt-3 text-sm font-bold leading-7 text-[var(--fg-muted)]">
-            {lang === 'ar'
-              ? 'الاسم مطلوب لإنشاء الشهادة، والبريد الإلكتروني اختياري لإرسالها إليك.'
-              : lang === 'ur'
-                ? 'سرٹیفکیٹ بنانے کے لیے نام درکار ہے، اور بھیجنے کے لیے ای میل اختیاری ہے۔'
-                : 'Your name is required to create the certificate. Email is optional for delivery.'}
+            {privacy.certificate}
           </p>
+          {age === '12-17' && (
+            <p className="ink-sm mt-2 text-xs font-bold leading-6 text-[var(--fg-muted)]">
+              {privacy.minor}
+            </p>
+          )}
 
           <div className="mt-6 space-y-3 text-start">
             <label className="block">
@@ -1466,7 +1476,7 @@ export default function Play() {
           </Panel>
 
           <Panel className="mt-5 p-4">
-            <p className="text-2xl font-black text-[var(--green-dark)]" data-testid="stars-total">★ {rewards.stars} / {quiz.total * 2}</p>
+            <p className="text-2xl font-black text-[var(--green-dark)]" data-testid="stars-total">★ {rewards.stars} / {quiz.total}</p>
             <p className="mt-1 text-xs font-bold text-[var(--fg-muted)]">
               {lang === 'ar' ? 'أفضل رصيد نجوم' : lang === 'ur' ? 'بہترین ستارے' : 'Best stars'}: {starBest[mode]}
             </p>
@@ -1504,7 +1514,7 @@ export default function Play() {
               </PixelButton>
             )}
             <PixelButton size="md" color="blue" className="w-full" onClick={share} sound="select">
-              {copied ? s.copied : `📣 ${s.shareResult}`}
+              {`📣 ${s.shareResult}`}
             </PixelButton>
             <div className="flex justify-center py-2">{MenuLink}</div>
           </div>
@@ -1623,17 +1633,6 @@ export default function Play() {
             <span className="ink-sm mt-1 block text-xs font-bold leading-6">{quiz.kids ? s.goldenHintKids : s.goldenHint}</span>
           </Panel>
         )}
-
-        <ScamScene
-          key={`${mode}-${q.n}`}
-          scene={scene}
-          lang={lang}
-          inspect={revealed}
-          found={foundFlags[q.n] ?? []}
-          onFind={findFlag}
-          feedback={revealed ? 'correct' : wrongAttempt ? 'wrong' : null}
-          feedbackId={questionAttempts.length}
-        />
 
         <Panel className="quiz-question anim-in mt-3 p-5" key={q.n}>
           <h1 className="ink-sm text-base font-black leading-9 sm:text-lg sm:leading-10">

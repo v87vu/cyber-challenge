@@ -5,6 +5,7 @@ import { LEVELS, REWARDS } from '@/lib/questions';
 import { setLang, type Lang } from '@/lib/prefs';
 import { usePrefs } from '@/lib/usePrefs';
 import Shell from '@/components/Shell';
+import EventEntry from '@/components/event/EventEntry';
 import { Chip, Panel } from '@/components/PixelUI';
 import { sfx } from '@/lib/sfx';
 
@@ -60,6 +61,7 @@ export default function Home() {
             </span>
             {lang !== 'en' && <span>{s.presenter}</span>}
           </Link>
+          <EventEntry />
           <div className="mt-3 flex items-center gap-2" role="group" aria-label="Language">
             {(['ar', 'en', 'ur'] as Lang[]).map((l) => (
               <button

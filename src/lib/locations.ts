@@ -1,5 +1,5 @@
 import type { Level } from './questions';
-import type { QuizType } from './scenes';
+import type { QuizType } from './stars';
 
 export type Location = 'fort' | 'home' | 'school' | 'souq' | 'bank' | 'corniche' | 'park';
 

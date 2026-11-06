@@ -33,86 +33,46 @@ function modules(globals = {}) {
   return load;
 }
 const load = modules();
-const { getScene } = load('src/lib/scenes.ts');
 const { summarizeStars } = load('src/lib/stars.ts');
-const { getQuiz, questionCopy } = load('src/lib/questions.ts');
-const ScamScene = load('src/components/ScamScene.tsx').default;
+const { getQuiz } = load('src/lib/questions.ts');
 const ShieldMap = load('src/components/ShieldMap.tsx').default;
 const Background = load('src/components/Background.tsx').default;
 const { levelLocation, locationImage } = load('src/lib/locations.ts');
 const escape = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
 const completeRun = (mode, seconds = 5) => {
   const quiz = getQuiz(mode === 'kids');
-  return {
-    attempts: quiz.questions.map((q) => ({ questionNumber: q.n, isCorrect: true, timeSpentSeconds: seconds })),
-    found: Object.fromEntries(quiz.questions.map((q) => [q.n, getScene(mode, q.n).flags.map((f) => f.id)])),
-  };
+  return quiz.questions.map((q) => ({ questionNumber: q.n, isCorrect: true, timeSpentSeconds: seconds }));
 };
 
 for (const mode of ['adult', 'kids']) {
-  test(`${mode}: every question has localized scenes, two to four unique flags, and no early hints`, () => {
-    const quiz = getQuiz(mode === 'kids');
-    assert.equal(quiz.total, mode === 'kids' ? 10 : 22);
-    for (const q of quiz.questions) {
-      const scene = getScene(mode, q.n);
-      assert.ok(scene.flags.length >= 2 && scene.flags.length <= 4);
-      assert.equal(new Set(scene.flags.map((f) => f.id)).size, scene.flags.length);
-      for (const lang of ['ar', 'en', 'ur']) {
-        assert.ok(questionCopy(q, lang).text);
-        assert.ok(scene.title[lang]);
-        const html = renderToStaticMarkup(React.createElement(ScamScene, { scene, lang, inspect: false, found: [], onFind() {}, feedback: null, feedbackId: 0 }));
-        assert.ok(!html.includes('data-testid="scene-hotspot"'));
-        assert.ok(!html.includes('<a '));
-        for (const flag of scene.flags) {
-          assert.ok(flag.content[lang] && flag.label[lang]);
-          assert.ok(html.includes(escape(flag.content[lang])));
-          assert.ok(!html.includes(escape(flag.label[lang])), `hidden tip leaked on ${mode}/${q.n}/${lang}`);
-        }
-        const inspected = renderToStaticMarkup(React.createElement(ScamScene, { scene, lang, inspect: true, found: [], onFind() {}, feedback: 'correct', feedbackId: 1 }));
-        assert.equal((inspected.match(/data-testid="scene-hotspot"/g) ?? []).length, scene.flags.length);
-      }
-    }
-  });
-  test(`${mode}: full completion awards two stars per question and five localized badges`, () => {
-    const { attempts, found } = completeRun(mode);
-    const result = summarizeStars(mode, attempts, found);
-    assert.equal(result.stars, attempts.length * 2);
-    assert.equal(result.badges.length, 5);
+  test(`${mode}: full completion awards one first-try star per question and four localized badges`, () => {
+    const attempts = completeRun(mode);
+    const result = summarizeStars(mode, attempts);
+    assert.equal(result.stars, attempts.length);
+    assert.equal(result.firstTry, attempts.length);
+    assert.equal(result.badges.length, 4);
     for (const badge of result.badges) for (const lang of ['ar', 'en', 'ur']) assert.ok(badge.name[lang]);
-    assert.equal(result.flagCount, result.totalFlags);
   });
-  test(`${mode}: retries/timeouts lose first-try star, repeated flags cannot add stars`, () => {
-    const { attempts, found } = completeRun(mode);
+  test(`${mode}: retries and timeouts lose only the affected first-try star`, () => {
+    const attempts = completeRun(mode);
     attempts.unshift({ questionNumber: 1, isCorrect: false, timeSpentSeconds: 45 });
-    found[1].push(found[1][0], 'invalid-flag');
-    const result = summarizeStars(mode, attempts, found);
-    assert.equal(result.stars, (attempts.length - 1) * 2 - 1);
+    const result = summarizeStars(mode, attempts);
+    assert.equal(result.stars, attempts.length - 2);
+    assert.equal(result.firstTry, attempts.length - 2);
     assert.ok(!result.badges.some((badge) => badge.id === 'flawless'));
     assert.equal(result.averageSeconds, (45 + (attempts.length - 1) * 5) / (attempts.length - 1));
   });
-  test(`${mode}: inspection is optional and cannot award stars before correct answers`, () => {
-    const { attempts, found } = completeRun(mode);
-    assert.equal(summarizeStars(mode, [], found).stars, 0);
-    assert.equal(summarizeStars(mode, attempts, {}).stars, attempts.length);
-    assert.equal(summarizeStars(mode, attempts.slice(0, 1), found).stars, 2);
-    assert.equal(summarizeStars(mode, attempts.slice(0, -1), found).badges.length, 0);
-    assert.equal(summarizeStars(mode, [], {}).stars, 0);
-  });
-  test(`${mode}: badge conditions use all link questions, 80% of flags, and strict time threshold`, () => {
-    const { attempts, found } = completeRun(mode, 10);
-    assert.ok(!summarizeStars(mode, attempts, found).badges.some((b) => b.id === 'quick'));
-    const linkQuestion = attempts.find((a) => getScene(mode, a.questionNumber).linkQuestion).questionNumber;
-    const missingLink = { ...found, [linkQuestion]: [] };
-    assert.ok(!summarizeStars(mode, attempts, missingLink).badges.some((b) => b.id === 'links'));
-    const totalFlags = summarizeStars(mode, attempts, found).totalFlags;
-    const threshold = Math.ceil(totalFlags * .8);
-    const partial = {};
-    let remaining = threshold;
-    for (const [n, ids] of Object.entries(found)) { partial[n] = ids.slice(0, remaining); remaining -= partial[n].length; }
-    assert.ok(summarizeStars(mode, attempts, partial).badges.some((b) => b.id === 'detective'));
-    const last = Object.keys(partial).findLast((n) => partial[n].length);
-    partial[last].pop();
-    assert.ok(!summarizeStars(mode, attempts, partial).badges.some((b) => b.id === 'detective'));
+  test(`${mode}: badges use first-try accuracy, completion, and strict time threshold`, () => {
+    const attempts = completeRun(mode, 10);
+    assert.ok(!summarizeStars(mode, attempts).badges.some((b) => b.id === 'quick'));
+    const total = attempts.length;
+    const threshold = Math.ceil(total * 0.8);
+    for (let n = threshold + 1; n <= total; n++) attempts.unshift({ questionNumber: n, isCorrect: false, timeSpentSeconds: 5 });
+    assert.ok(summarizeStars(mode, attempts).badges.some((b) => b.id === 'detective'));
+    attempts.unshift({ questionNumber: threshold, isCorrect: false, timeSpentSeconds: 5 });
+    assert.ok(!summarizeStars(mode, attempts).badges.some((b) => b.id === 'detective'));
+    assert.equal(summarizeStars(mode, []).stars, 0);
+    assert.equal(summarizeStars(mode, completeRun(mode).slice(0, -1)).badges.length, 0);
   });
   test(`${mode}: map uses every real level and marks only finished levels complete`, () => {
     const quiz = getQuiz(mode === 'kids');
@@ -136,21 +96,21 @@ test('persistent bests are separate, monotonic, stable, bounded, and survive a r
   let notifications = 0;
   const unsubscribe = stars.subscribeBestStars(() => notifications++);
   assert.strictEqual(stars.bestStarsSnapshot(), stars.bestStarsSnapshot());
-  assert.equal(stars.recordStars(35, 'adult'), true);
-  assert.equal(stars.recordStars(12, 'kids'), true);
+  assert.equal(stars.recordStars(22, 'adult'), true);
+  assert.equal(stars.recordStars(6, 'kids'), true);
   assert.equal(stars.recordStars(20, 'adult'), false);
   assert.equal(stars.recordStars(NaN, 'adult'), false);
   assert.equal(notifications, 2);
-  assert.equal(stars.bestStarsSnapshot().adult, 35);
-  assert.equal(stars.bestStarsSnapshot().kids, 12);
+  assert.equal(stars.bestStarsSnapshot().adult, 22);
+  assert.equal(stars.bestStarsSnapshot().kids, 6);
   assert.equal(stars.bestStarsServerSnapshot().adult, 0);
   const reloaded = modules(globals)('src/lib/stars.ts');
-  assert.equal(reloaded.bestStarsSnapshot().adult, 35);
-  data.set('dac-best-stars-kids', '18');
+  assert.equal(reloaded.bestStarsSnapshot().adult, 22);
+  data.set('dac-best-stars-kids', '8');
   storageListener({ key: 'dac-best-stars-kids' });
-  assert.equal(stars.bestStarsSnapshot().kids, 18);
+  assert.equal(stars.bestStarsSnapshot().kids, 8);
   assert.equal(stars.recordStars(100, 'kids'), true);
-  assert.equal(stars.bestStarsSnapshot().kids, 20);
+  assert.equal(stars.bestStarsSnapshot().kids, 10);
   unsubscribe();
   assert.equal(storageListener, null);
 });
@@ -165,28 +125,6 @@ test('storage failures and corrupt values do not break play', () => {
 });
 
 for (const mode of ['adult', 'kids']) {
-  test(`${mode}: every localized flag is attached once to a real scene element`, () => {
-    for (const question of getQuiz(mode === 'kids').questions) {
-      const scene = getScene(mode, question.n);
-      for (const lang of ['ar', 'en', 'ur']) {
-        const props = { scene, lang, found: [], onFind() {}, feedback: null, feedbackId: 0 };
-        for (const inspect of [false, true]) {
-          const html = renderToStaticMarkup(React.createElement(ScamScene, { ...props, inspect }));
-          for (const flag of scene.flags) {
-            assert.equal(html.split(`data-scene-element="${flag.id}"`).length - 1, 1, `${mode}/${question.n}/${lang}/${flag.id}`);
-          }
-          assert.ok(!/\{(link|sender|urgent|password|otp)\}/.test(html), 'unresolved template');
-          assert.ok(!html.includes('scene-field'), 'must not render a list of chips');
-          assert.ok(!/<(?:a|input|form)\b/.test(html), 'mock cannot navigate or collect credentials');
-          assert.ok(!/(police|government|شرطة|حكومة|پولیس)/i.test(html), 'no government branding');
-        }
-        const complete = renderToStaticMarkup(React.createElement(ScamScene, { ...props, inspect: true, found: scene.flags.map((f) => f.id) }));
-        assert.ok(complete.includes('scene-star-burst'));
-        assert.ok(complete.includes(`${scene.flags.length}/${scene.flags.length}`));
-      }
-    }
-  });
-
   test(`${mode}: locations, image files, next-level preloads and station thumbnails agree`, () => {
     const levels = getQuiz(mode === 'kids').levels;
     const expected = mode === 'kids' ? ['school', 'park', 'home', 'fort'] : ['home', 'park', 'souq', 'bank', 'fort', 'corniche'];
@@ -206,18 +144,79 @@ for (const mode of ['adult', 'kids']) {
   });
 }
 
-test('scene kinds have distinct device structures and bank SMS keeps its full sentence inline', () => {
-  const cases = { 1: 'scene-orbit', 2: 'scene-chat-body', 5: 'scene-mail-body', 6: 'scene-message', 7: 'scene-call-actions', 8: 'scene-post-art', 11: 'scene-network-list', 12: 'scene-login', 13: 'scene-post-cta', 15: 'scene-receipt-body', 17: 'scene-qr-pattern' };
-  for (const [n, expected] of Object.entries(cases)) {
-    const scene = getScene('adult', Number(n));
-    const html = renderToStaticMarkup(React.createElement(ScamScene, { scene, lang: 'ar', inspect: false, found: [], onFind() {}, feedback: null, feedbackId: 0 }));
-    assert.ok(html.includes(expected));
+function shareHarness(overrides = {}) {
+  const operations = [];
+  const context = {
+    createLinearGradient() { return { addColorStop() {} }; },
+    fillRect() {},
+    fillText(text) { operations.push(`text:${text}`); },
+  };
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => context,
+    toBlob(callback) { callback(new Blob(['png'], { type: 'image/png' })); },
+  };
+  const anchor = { click() { operations.push('download'); }, remove() {} };
+  const document = {
+    fonts: { load: async () => { operations.push('font-load'); }, ready: Promise.resolve() },
+    createElement(tag) { return tag === 'canvas' ? canvas : anchor; },
+    body: { appendChild() {}, removeChild() {} },
+    documentElement: {},
+  };
+  const globals = {
+    document,
+    getComputedStyle: () => ({ getPropertyValue: () => 'Cairo' }),
+    Blob,
+    File: class File { constructor(parts, name, options) { this.parts = parts; this.name = name; this.type = options.type; } },
+    URL: { createObjectURL: () => 'blob:share-card', revokeObjectURL() {} },
+    navigator: {},
+    ...overrides,
+  };
+  return { operations, canvas, anchor, document, load: modules(globals) };
+}
+
+test('share card loads Cairo and draws the required 1080×1350 Arabic content', async () => {
+  const harness = shareHarness();
+  const { createShareCard } = harness.load('src/lib/share-card.ts');
+  const blob = await createShareCard({ title: 'بطل الوعي الرقمي', score: 22, total: 22, stars: 22, badges: ['🔎', '⚡', '✨', '🕵️'] });
+  assert.equal(blob.type, 'image/png');
+  assert.equal(harness.canvas.width, 1080);
+  assert.equal(harness.canvas.height, 1350);
+  assert.equal(harness.operations[0], 'font-load');
+  const text = harness.operations.filter((op) => op.startsWith('text:')).join('\n');
+  for (const expected of ['تحدي الوعي الرقمي', 'بطل الوعي الرقمي', '22 / 22', '★ 22', 'cyber-challenge-v2.vercel.app']) assert.ok(text.includes(expected), expected);
+  assert.ok(text.includes('🔎 ⚡ ✨'));
+  assert.ok(!text.includes('🕵️'), 'only three badge emojis');
+});
+
+test('share card uses Web Share with a PNG file when supported', async () => {
+  let shared;
+  const harness = shareHarness({ navigator: { canShare: () => true, share: async (data) => { shared = data; } } });
+  const { shareAchievement } = harness.load('src/lib/share-card.ts');
+  await shareAchievement({ title: 'بطل الوعي الرقمي', score: 10, total: 10, stars: 10, badges: ['🛡️'] });
+  assert.equal(shared.files.length, 1);
+  assert.equal(shared.files[0].type, 'image/png');
+  assert.ok(!harness.operations.includes('download'));
+});
+
+test('share card downloads the PNG when file sharing is unavailable', async () => {
+  const harness = shareHarness();
+  const { shareAchievement } = harness.load('src/lib/share-card.ts');
+  await shareAchievement({ title: 'بطل الوعي الرقمي', score: 10, total: 10, stars: 8, badges: ['🛡️'] });
+  assert.equal(harness.anchor.download, 'digital-awareness-achievement.png');
+  assert.ok(harness.operations.includes('download'));
+});
+
+test('privacy notices have concise Arabic, English, and Urdu copy', () => {
+  const { privacyCopy } = load('src/lib/privacy.ts');
+  for (const lang of ['ar', 'en', 'ur']) {
+    const copy = privacyCopy(lang);
+    assert.ok(copy.survey);
+    assert.ok(copy.certificate);
+    assert.ok(copy.minor);
   }
-  const bank = getScene('adult', 6);
-  const html = renderToStaticMarkup(React.createElement(ScamScene, { scene: bank, lang: 'ar', inspect: false, found: [], onFind() {}, feedback: null, feedbackId: 0 }));
-  const plain = html.replace(/<[^>]*>/g, '');
-  assert.ok(plain.includes('يرجى تحديث بيانات حسابك البنكي فوراً من خلال الرابط التالي: bank-update.example'));
-  assert.ok(html.includes('AD-BANK-UPD'));
-  assert.ok(html.includes('class="scene-link"'));
-  assert.ok(html.includes('class="scene-urgent"'));
+  assert.equal(privacyCopy('ar').survey, 'إجاباتك تُستخدم لأغراض التوعية والإحصاء فقط، ولا تُشارك مع أي جهة خارج القيادة العامة لشرطة أم القيوين.');
+  assert.equal(privacyCopy('ar').certificate, 'نستخدم اسمك لإصدار الشهادة، وبريدك (اختياري) لإرسالها فقط. لن نستخدمهما لأي غرض آخر.');
+  assert.equal(privacyCopy('ar').minor, 'إذا كان عمرك أقل من 18 سنة، يُرجى إدخال بياناتك بعلم أحد والديك.');
 });

@@ -1,0 +1,4 @@
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti i { position: absolute; top: -16px; width: 9px; height: 13px; animation: fall 1.8s ease-out both; }
+@keyframes fall { from { translate: 0 -20px; opacity: 1; } to { translate: 20px 220px; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
