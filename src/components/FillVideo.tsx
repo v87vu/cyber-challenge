@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject, type SyntheticEvent } from 'react';
+import type { Cue } from '@/lib/captions';
 
 /* فيديو يملأ الشاشة دون قصّ المحتوى المهم:
    - fit="contain": الصورة كاملة في الوسط، والفراغ يُملأ بنسخة ضبابية حيّة من الفيديو نفسه (لا أشرطة سوداء).
@@ -15,6 +16,8 @@ type Props = {
   muted?: boolean;
   ariaLabel?: string;
   noSeekAhead?: boolean;
+  captions?: Cue[] | null;
+  captionsDir?: 'ltr' | 'rtl';
   onEnded: () => void;
   onError: () => void;
   onPlay?: () => void;
@@ -23,8 +26,10 @@ type Props = {
 };
 
 export default function FillVideo({
-  src, videoRef, fit, testId, muted, ariaLabel, noSeekAhead, onEnded, onError, onPlay, onTimeUpdate, onClick,
+  src, videoRef, fit, testId, muted, ariaLabel, noSeekAhead, captions, captionsDir = 'ltr', onEnded, onError, onPlay, onTimeUpdate, onClick,
 }: Props) {
+  const [cueIdx, setCueIdx] = useState(-1);
+  const cueRef = useRef(-1);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const watchedRef = useRef(0);
   const [moving, setMoving] = useState(false);
@@ -41,6 +46,11 @@ export default function FillVideo({
     const draw = () => {
       if (stop) return;
       if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (captions) {
+        const now = video.currentTime;
+        const idx = captions.findIndex((c) => now >= c.start && now < c.end);
+        if (idx !== cueRef.current) { cueRef.current = idx; setCueIdx(idx); }
+      }
       const v = video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
       if (v.requestVideoFrameCallback) handle = v.requestVideoFrameCallback(draw);
       else handle = window.requestAnimationFrame(draw);
@@ -52,7 +62,7 @@ export default function FillVideo({
       if (v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(handle);
       else window.cancelAnimationFrame(handle);
     };
-  }, [src, videoRef]);
+  }, [src, videoRef, captions]);
 
   const fitClass =
     fit === 'cover-portrait'
@@ -96,6 +106,17 @@ export default function FillVideo({
         }}
         onClick={onClick}
       />
+      {captions && cueIdx >= 0 && (
+        <p
+          data-testid="video-caption"
+          dir={captionsDir}
+          lang={captionsDir === 'rtl' ? 'ur' : 'en'}
+          className="pointer-events-none absolute inset-x-0 z-20 mx-auto w-fit max-w-[min(92vw,52rem)] rounded-xl px-4 py-2 text-center text-[15px] font-bold leading-7 text-white sm:text-xl sm:leading-9"
+          style={{ bottom: 'max(3.25rem, calc(env(safe-area-inset-bottom) + 2.75rem))', background: 'rgba(4, 12, 24, 0.72)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
+        >
+          {captions[cueIdx].text}
+        </p>
+      )}
     </div>
   );
 }
@@ -121,7 +142,7 @@ export function VideoChrome({ targetRef, videoRef, lang }: {
   return (
     <>
       <p className="video-rotate-hint pointer-events-none absolute inset-x-0 z-20 mx-auto w-max rounded-full bg-black/55 px-4 py-2 text-xs font-black text-white"
-        style={{ bottom: 'max(5.5rem, calc(env(safe-area-inset-bottom) + 5rem))' }}>
+        style={{ top: 'max(4.75rem, calc(env(safe-area-inset-top) + 4.25rem))' }}>
         🔄 {t('أدر هاتفك لمشاهدة أكبر', 'Turn your phone for a bigger view', 'بڑی ویڈیو کے لیے فون گھمائیں')}
       </p>
       <button

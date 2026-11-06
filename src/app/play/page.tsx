@@ -15,6 +15,7 @@ import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
 import { AGE_GROUPS, setAge, setEmail, setGender, setName, type AgeGroup, type Gender } from '@/lib/prefs';
 import FillVideo, { VideoChrome } from '@/components/FillVideo';
+import { introCaptions } from '@/lib/captions';
 import ShieldMap from '@/components/ShieldMap';
 import { levelLocation, transitionClip } from '@/lib/locations';
 import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars } from '@/lib/stars';
@@ -895,6 +896,8 @@ function Play() {
           fit="contain"
           testId="intro-video"
           noSeekAhead
+          captions={introCaptions(quiz.kids, lang)}
+          captionsDir={lang === 'ur' ? 'rtl' : 'ltr'}
           onEnded={finishVideo}
           onError={finishVideo}
           onPlay={() => setVideoTap(false)}
