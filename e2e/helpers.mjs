@@ -38,8 +38,8 @@ export const pickAgeEn = async (page, bracket = '18–24 years') => {
 export const passOnboardingAr = async (page, { bracket = '18–24 سنة', gender = 'ذكر' } = {}) => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'متابعة' }).click();
-  await fastForwardVideo(page, bracket === '12–17 سنة');
   await page.getByText(gender, { exact: true }).click({ timeout: 8000 });
+  await fastForwardVideo(page, bracket === '12–17 سنة');
   await page.getByRole('button', { name: /ابدأ/ }).waitFor({ timeout: 8000 });
 };
 
@@ -60,8 +60,7 @@ export const answerCorrect = async (page, text, skipTransition = true) => {
   const cont = page.getByRole('button', { name: /متابعة|Continue/ }).first();
   if (await cont.isVisible().catch(() => false)) await cont.click().catch(() => {});
   if (skipTransition) {
-    const transitionSkip = page.getByTestId('transition-skip');
-    if (await transitionSkip.isVisible().catch(() => false)) await transitionSkip.click();
+    if (await page.getByTestId('level-transition').isVisible().catch(() => false)) await fastForwardTransition(page);
     await page.keyboard.press('Enter').catch(() => {});
   }
   await page.waitForTimeout(300);
@@ -83,5 +82,19 @@ export const fastForwardVideo = async (page, kids = false) => {
     await v.play().catch(() => {});
   });
   await vid.waitFor({ state: 'detached', timeout: 10000 });
+  await page.waitForTimeout(200);
+};
+
+/* فيديو الانتقال بين المراحل لا يُتخطى — في الاختبارات نقفز لقرب نهايته */
+export const fastForwardTransition = async (page) => {
+  const stage = page.getByTestId('level-transition');
+  const vid = stage.locator('video');
+  await vid.evaluate(async (v) => {
+    if (!isFinite(v.duration)) await new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true }));
+    v.muted = true;
+    v.currentTime = Math.max(0, v.duration - 0.3);
+    await v.play().catch(() => {});
+  });
+  await stage.waitFor({ state: 'detached', timeout: 10000 });
   await page.waitForTimeout(200);
 };

@@ -75,12 +75,6 @@ for (const [name, w, h] of VIEWPORTS) {
   await cont.click();
   await p.waitForTimeout(250);
 
-  /* الفيديو التوعوي بعد اختيار العمر */
-  await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
-  await noHScroll(p, name, 'video');
-  await inView(p, p.getByTestId('intro-video'), 'intro video', name);
-  await fastForwardVideo(p, false);
-
   if (await p.getByRole('button', { name: /هيا لنبدأ/ }).isVisible().catch(() => false)) note(`${name}: briefing screen still shown`);
 
   /* النوع — بلا أي بيانات شخصية */
@@ -89,6 +83,13 @@ for (const [name, w, h] of VIEWPORTS) {
   if (await p.locator('input').count()) note(`${name}: input fields shown before the game`);
   await p.getByText('ذكر', { exact: true }).click();
   await p.waitForTimeout(400);
+
+  /* الفيديو التوعوي بعد اختيار النوع — ملء الشاشة */
+  await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
+  await noHScroll(p, name, 'video');
+  await inView(p, p.getByTestId('intro-video'), 'intro video', name);
+  await inView(p, p.getByTestId('video-fullscreen'), 'video fullscreen button', name);
+  await fastForwardVideo(p, false);
 
   /* البداية */
   await noHScroll(p, name, 'intro');

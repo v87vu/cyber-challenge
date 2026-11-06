@@ -379,3 +379,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .transition-overlay { animation: none; }
 }
+
+/* تلميح تدوير الهاتف: يظهر فقط رأسياً على أجهزة اللمس */
+.video-rotate-hint { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  .video-rotate-hint { display: block; animation: scene-fade 400ms ease-out both; }
+}

@@ -5,7 +5,7 @@
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import {
   AR_CORRECT, KIDS_AR, ADULT_TOTAL, KIDS_TOTAL,
-  passOnboardingAr, startGame, answerCorrect,
+  passOnboardingAr, startGame, answerCorrect, fastForwardTransition,
 } from './helpers.mjs';
 
 const BASE = process.env.BASE || 'http://localhost:3100';
@@ -25,7 +25,7 @@ let page = await ctx.newPage();
 watch(page);
 await page.goto(`${BASE}/play`);
 await passOnboardingAr(page);
-ok('onboarding: age → video → briefing → gender');
+ok('onboarding: age → gender → video');
 await startGame(page);
 let q1Order = await page.getByTestId('option').allInnerTexts();
 for (let n = 1; n <= ADULT_TOTAL; n++) {
@@ -36,7 +36,7 @@ for (let n = 1; n <= ADULT_TOTAL; n++) {
     const src = await transition.locator('video').getAttribute('src');
     if (src?.includes('t1-home-park')) ok('adult Q5 → t1-home-park transition');
     else bad(`adult Q5 transition src=${src}`);
-    await page.getByTestId('transition-skip').click();
+    await fastForwardTransition(page);
   }
 }
 await page.waitForTimeout(1200);

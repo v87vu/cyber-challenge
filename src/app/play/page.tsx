@@ -14,6 +14,7 @@ import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
 import { AGE_GROUPS, setAge, setEmail, setGender, setName, type AgeGroup, type Gender } from '@/lib/prefs';
 import ScamScene from '@/components/ScamScene';
+import FillVideo, { VideoChrome } from '@/components/FillVideo';
 import ShieldMap from '@/components/ShieldMap';
 import { levelLocation, transitionClip } from '@/lib/locations';
 import { getScene } from '@/lib/scenes';
@@ -96,6 +97,7 @@ export default function Play() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoTap, setVideoTap] = useState(false);
   const introVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoStageRef = useRef<HTMLDivElement | null>(null);
   const [transitionSrc, setTransitionSrc] = useState<string | null>(null);
   const [transitionTap, setTransitionTap] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -360,7 +362,7 @@ export default function Play() {
   const finishVideo = useCallback(() => {
     setVideoComplete(true);
     setVideoProgress(100);
-    setPhase('gender');
+    setPhase('intro');
   }, []);
 
   const finishTransition = useCallback(() => {
@@ -489,14 +491,11 @@ export default function Play() {
         if (e.key === 'Enter') confirm();
       } else if (phase === 'correct' && e.key === 'Enter') next();
       else if (phase === 'milestone' && e.key === 'Enter') advance();
-      else if (phase === 'transition' && (e.key === 'Enter' || e.key === ' ')) {
-        e.preventDefault();
-        finishTransition();
-      } else if (phase === 'golden' && (e.key === 'Enter' || e.key === ' ')) setPhase('question');
+      else if (phase === 'golden' && (e.key === 'Enter' || e.key === ' ')) setPhase('question');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, confirm, next, advance, finishTransition]);
+  }, [phase, confirm, next, advance]);
 
   const MenuBtn = (
     <Link
@@ -637,7 +636,10 @@ export default function Play() {
                   onClick={() => {
                     setGender(g);
                     sfx.select();
-                    setPhase('intro');
+                    setVideoComplete(false);
+                    setVideoProgress(0);
+                    setVideoTap(false);
+                    setPhase('video');
                   }}
                   className="pxl flex flex-col items-center gap-3 px-3 pb-4 pt-6 transition-transform active:scale-[0.98]"
                   style={{ background: gender === g ? '#eefaf3' : '#ffffff' }}
@@ -733,11 +735,8 @@ export default function Play() {
               onClick={() => {
                 if (agePick === null) return;
                 setAge(agePick);
-                setVideoComplete(false);
-                setVideoProgress(0);
-                setVideoTap(false);
                 sfx.confirm();
-                setPhase('video');
+                setPhase('gender');
               }}
               className="w-full rounded-2xl px-6 py-4 text-lg font-black uppercase tracking-wide transition-transform active:translate-y-[3px] disabled:cursor-not-allowed"
               style={{
@@ -883,104 +882,58 @@ export default function Play() {
   /* ---------------------------------------------------------- الفيديو التوعوي */
   if (phase === 'video') {
     return (
-      <Shell dim={0.55}>
-        <div className="anim-in">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="ink text-xl font-black">
-              {lang === 'ar' ? 'الفيديو التوعوي' : lang === 'ur' ? 'آگاہی ویڈیو' : 'Awareness video'}
-            </h1>
-            {MenuBtn}
-          </div>
-
-          <Panel tone="gold" className="mt-4 p-4 text-center">
-            <p className="ink-sm text-sm font-black leading-7">
-              {lang === 'ar'
-                ? `هذا الفيديو مخصص للفئة العمرية ${ageLabel}. شاهده كاملًا للمتابعة.`
-                : lang === 'ur'
-                  ? `یہ ویڈیو ${ageLabel} عمر کے گروپ کے لیے ہے۔ جاری رکھنے کے لیے اسے مکمل دیکھیں۔`
-                  : `This video is for the ${ageLabel} age group. Watch it fully to continue.`}
-            </p>
-          </Panel>
-
-          <Panel className="mt-4 overflow-hidden p-3" tone="panel">
-            <div className="relative overflow-hidden rounded-2xl" style={{ background: '#04101f' }}>
-              <video
-                ref={introVideoRef}
-                data-testid="intro-video"
-                src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
-                className="block aspect-video w-full"
-                autoPlay
-                playsInline
-                preload="auto"
-                onEnded={finishVideo}
-                onError={finishVideo}
-                onPlay={() => setVideoTap(false)}
-                onTimeUpdate={(e) => {
-                  const v = e.currentTarget;
-                  if (!videoComplete && v.duration > 0) {
-                    setVideoProgress(Math.min(99, Math.round((v.currentTime / v.duration) * 100)));
-                  }
-                }}
-                onClick={(e) => {
-                  const v = e.currentTarget;
-                  if (v.paused) v.play().catch(() => setVideoTap(true));
-                  else v.pause();
-                }}
-              />
-              {videoTap && (
-                <button
-                  onClick={() => introVideoRef.current?.play().catch(() => setVideoTap(true))}
-                  aria-label={lang === 'ar' ? 'اضغط للتشغيل' : lang === 'ur' ? 'چلانے کے لیے دبائیں' : 'Tap to play'}
-                  className="absolute inset-0 grid place-items-center"
-                  style={{ background: 'rgba(4, 16, 31, 0.45)' }}
-                >
-                  <span
-                    className="grid h-16 w-16 place-items-center rounded-full pb-1 ps-1 text-2xl"
-                    style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
-                  >
-                    ▶
-                  </span>
-                </button>
-              )}
-            </div>
-
-            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200" aria-hidden>
-              <div
-                className="h-full rounded-full bg-[var(--green)] transition-[width] duration-300"
-                style={{ width: `${videoProgress}%` }}
-              />
-            </div>
-            <p className="ink-sm mt-2 text-center text-xs font-black text-[var(--fg-muted)]">
-              {videoComplete
-                ? lang === 'ar'
-                  ? '✅ اكتملت المشاهدة.'
-                  : lang === 'ur'
-                    ? '✅ ویڈیو مکمل ہو گئی۔'
-                    : '✅ Video complete.'
-                : lang === 'ar'
-                  ? `نسبة المشاهدة: ${videoProgress}%`
-                  : lang === 'ur'
-                    ? `دیکھنے کی پیش رفت: ${videoProgress}%`
-                    : `Watched: ${videoProgress}%`}
-            </p>
-          </Panel>
-
-          {!videoComplete && (
-            <PixelButton
-              size="lg"
-              color="green"
-              className="mt-4 w-full"
-              disabled
+      <div ref={videoStageRef} className="fixed inset-0 z-50 overflow-hidden bg-[#06101e] text-white">
+        <FillVideo
+          src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
+          videoRef={introVideoRef}
+          fit="contain"
+          testId="intro-video"
+          noSeekAhead
+          onEnded={finishVideo}
+          onError={finishVideo}
+          onPlay={() => setVideoTap(false)}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            if (!videoComplete && v.duration > 0) {
+              setVideoProgress(Math.min(99, Math.round((v.currentTime / v.duration) * 100)));
+            }
+          }}
+          onClick={(e) => {
+            const v = e.currentTarget;
+            if (v.paused) v.play().catch(() => setVideoTap(true));
+            else v.pause();
+          }}
+        />
+        <p
+          className="pointer-events-none absolute inset-x-0 z-10 px-16 text-center text-sm font-black drop-shadow-md sm:text-base"
+          style={{ top: 'max(1.1rem, env(safe-area-inset-top))' }}
+        >
+          🎬 {lang === 'ar' ? 'شاهد الرسالة التوعوية قبل أن نبدأ' : lang === 'ur' ? 'شروع کرنے سے پہلے آگاہی پیغام دیکھیں' : 'Watch the awareness message before we start'}
+        </p>
+        <VideoChrome targetRef={videoStageRef} videoRef={introVideoRef} lang={lang} />
+        {videoTap && (
+          <button
+            onClick={() => introVideoRef.current?.play().catch(() => setVideoTap(true))}
+            aria-label={lang === 'ar' ? 'اضغط للتشغيل' : lang === 'ur' ? 'چلانے کے لیے دبائیں' : 'Tap to play'}
+            className="absolute inset-0 z-30 grid place-items-center"
+            style={{ background: 'rgba(4, 16, 31, 0.45)' }}
+          >
+            <span
+              className="grid h-20 w-20 place-items-center rounded-full pb-1 ps-1 text-3xl"
+              style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
             >
-              {lang === 'ar'
-                ? '🔒 أكمل الفيديو للمتابعة'
-                : lang === 'ur'
-                  ? '🔒 جاری رکھنے کے لیے ویڈیو مکمل کریں'
-                  : '🔒 Finish the video to continue'}
-            </PixelButton>
-          )}
+              ▶
+            </span>
+          </button>
+        )}
+        <div
+          className="absolute inset-x-6 z-10 h-1.5 overflow-hidden rounded-full bg-white/25"
+          style={{ bottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+          aria-hidden
+        >
+          <div className="h-full rounded-full bg-[#58cc02] transition-[width] duration-300" style={{ width: `${videoProgress}%` }} />
         </div>
-      </Shell>
+      </div>
     );
   }
 
@@ -1275,18 +1228,15 @@ export default function Play() {
         className="fixed inset-0 z-50 overflow-hidden bg-[#06101e] text-white"
       >
         {!reducedMotion && (
-          <video
-            ref={transitionVideoRef}
+          <FillVideo
             src={transitionSrc}
-            className="transition-video h-full w-full"
-            autoPlay
+            videoRef={transitionVideoRef}
+            fit="cover-portrait"
             muted
-            playsInline
-            preload="auto"
+            ariaLabel="المرحلة التالية"
             onEnded={finishTransition}
             onError={finishTransition}
             onPlay={() => setTransitionTap(false)}
-            aria-label="المرحلة التالية"
           />
         )}
 
@@ -1315,15 +1265,6 @@ export default function Play() {
           </button>
         )}
 
-        <button
-          type="button"
-          data-testid="transition-skip"
-          onClick={finishTransition}
-          className="absolute end-4 z-20 min-h-11 min-w-11 rounded-full border border-white/30 bg-black/55 px-4 py-2 text-sm font-black text-white"
-          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-        >
-          تخطي ⟵
-        </button>
       </div>
     );
   }
