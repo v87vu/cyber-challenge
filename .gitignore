@@ -138,3 +138,6 @@ dist
 # محلي
 .env.local
 _council/
+.claude/settings.local.json
+setup-admin.sh
+.dbpassword.local
