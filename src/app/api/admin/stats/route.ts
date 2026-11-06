@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       supabaseRest<Record<string, number>[]>('game_dashboard_summary?select=*'),
       supabaseRest<Record<string, number | string>[]>('question_statistics?select=*&order=wrong_attempts.desc'),
       supabaseRest<Record<string, number | string | null>[]>(
-        'game_sessions?select=played_at,lang,age_group,gender,quiz_type,wrong_attempts,duration_seconds&order=played_at.desc&limit=1000',
+        'game_sessions?select=game_id,player_id,played_at,player_name,player_email,player_phone,lang,age_group,gender,quiz_type,score,total,wrong_attempts,duration_seconds,completed,certificate_requested,certificate_sent,fraud_experience,fraud_details,extortion_experience,extortion_details&order=played_at.desc&limit=1000',
       ),
     ]);
 
