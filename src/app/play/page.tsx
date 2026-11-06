@@ -532,7 +532,7 @@ export default function Play() {
         <video
           ref={videoRef}
           data-testid="intro-video"
-          src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}${lang === 'en' ? '-en' : ''}.mp4${quiz.kids ? '' : '?v=2'}`}
+          src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
           className="max-h-full max-w-full rounded-xl"
           style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.16), 0 18px 50px rgba(0,0,0,0.55)' }}
           playsInline

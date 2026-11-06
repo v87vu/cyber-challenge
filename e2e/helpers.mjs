@@ -57,5 +57,6 @@ export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
 export const pickAgeEn = async (page, bracket = '18–24 years') => {
   await page.getByText(bracket, { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await skipVideo(page, bracket.startsWith('12'), true);
+  // الدبلجة الإنجليزية موقوفة حالياً — الفيديو العربي يُعرض للغتين
+  await skipVideo(page, bracket.startsWith('12'));
 };
