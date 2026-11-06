@@ -70,7 +70,7 @@ export default function ScamScene({ scene, lang, inspect, found, onFind, feedbac
   }
   const senderFlag = scene.flags.find((flag) => flag.id === 'sender');
   const sender = senderFlag
-    ? mark('sender', <><bdi>{scene.sender ?? '+971 5x xxx xxxx'}</bdi> · <bdi>{senderFlag.content[lang]}</bdi></>)
+    ? mark('sender', <><bdi>{scene.sender ?? '+971 5x xxx xxxx'}</bdi><small className="scene-sender-note">{senderFlag.content[lang]}</small></>)
     : <bdi>{scene.sender ?? (scene.kind === 'sms' ? '+971 5x xxx xxxx' : scene.title[lang])}</bdi>;
   const status = <div className="scene-status" dir="ltr" aria-hidden><span>9:41</span><span className="scene-speaker" /><Signal /></div>;
   const header = <div className="scene-app-header"><span aria-hidden>‹</span><span className="scene-avatar" aria-hidden>{scene.kind === 'sms' ? '✉' : '●'}</span><strong>{sender}</strong><span aria-hidden>⋮</span></div>;
@@ -82,26 +82,26 @@ export default function ScamScene({ scene, lang, inspect, found, onFind, feedbac
       mock = <>{status}{header}<div className="scene-chat-body"><div className="scene-message">{message(['sender'])}<small dir="ltr">09:41 {scene.kind === 'whatsapp' && <span className="scene-ticks">✓✓</span>}</small></div></div></>;
       break;
     case 'email':
-      mock = <>{status}<div className="scene-mail-header"><strong>✉ {text('البريد', 'Mail', 'میل')}</strong><span>⋯</span></div><div className="scene-mail-body"><div>{text('من:', 'From:', 'از:')} {mark('identity')} <bdi className="scene-mail-address">{scene.sender}</bdi></div><strong>{text('الموضوع:', 'Subject:', 'موضوع:')} {scene.title[lang]}</strong><p>{message()}</p>{mark('link', undefined, 'scene-mail-link')}</div></>;
+      mock = <>{status}<div className="scene-mail-header"><strong>✉ {text('البريد', 'Mail', 'میل')}</strong><span aria-hidden>⋯</span></div><div className="scene-mail-body"><div className="scene-mail-from">{text('من:', 'From:', 'از:')} {mark('identity')} <bdi className="scene-mail-address" dir="ltr">{scene.sender}</bdi></div><strong>{text('الموضوع:', 'Subject:', 'موضوع:')} {scene.title[lang]}</strong><p>{message()}</p>{mark('link', undefined, 'scene-link scene-mail-link')}</div></>;
       break;
     case 'call':
-      mock = <>{status}<div className="scene-caller"><span className="scene-avatar" aria-hidden>☎</span><div><strong dir="ltr">+971 5x xxx xxxx</strong><small>{scene.title[lang]}</small></div></div><p className="scene-transcript">{message()}</p><div className="scene-call-actions" aria-hidden><span>☎ <small>{text('رفض', 'Decline', 'رد')}</small></span><span>☎ <small>{text('قبول', 'Accept', 'قبول')}</small></span></div></>;
+      mock = <>{status}<div className="scene-call-label">{text('مكالمة واردة', 'Incoming call', 'آنے والی کال')}</div><div className="scene-caller"><span className="scene-avatar" aria-hidden>☎</span><div><strong dir="ltr">+971 5x xxx xxxx</strong><small>{scene.title[lang]}</small></div></div><p className="scene-transcript">{message()}</p><div className="scene-call-actions" aria-hidden><span>☎ <small>{text('رفض', 'Decline', 'رد')}</small></span><span>☎ <small>{text('قبول', 'Accept', 'قبول')}</small></span></div></>;
       break;
     case 'social':
     case 'ad':
-      mock = <><div className="scene-post-header"><span className="scene-avatar" aria-hidden>●</span><div><strong>{sender}</strong><small>{scene.kind === 'ad' ? text('مموّل', 'Sponsored', 'اشتہار') : text('منشور في المجموعة', 'Group post', 'گروپ پوسٹ')}</small></div><span aria-hidden>⋯</span></div><div className="scene-post-body"><div className="scene-post-art" aria-hidden>{scene.artwork ?? '🎁'}</div><p>{message(['sender'])}</p></div><div className="scene-post-cta" aria-hidden>{scene.kind === 'ad' ? text('اعرف المزيد', 'Learn more', 'مزید جانیں') : text('تعليق · مشاركة', 'Comment · Share', 'تبصرہ · شیئر')}</div></>;
+      mock = <>{status}<div className="scene-social-header"><strong>◉ {text('المجتمع', 'Community', 'کمیونٹی')}</strong><span aria-hidden>⌕</span></div><div className="scene-post-header"><span className="scene-avatar" aria-hidden>●</span><div><strong>{sender}</strong><small>{scene.kind === 'ad' ? text('مموّل', 'Sponsored', 'اشتہار') : text('منشور في المجموعة', 'Group post', 'گروپ پوسٹ')}</small></div><span aria-hidden>⋯</span></div><div className="scene-post-body"><div className="scene-post-art" aria-hidden>{scene.artwork ?? '🎁'}</div><p>{message(['sender'])}</p></div><div className="scene-post-cta" aria-hidden>{scene.kind === 'ad' ? text('اعرف المزيد', 'Learn more', 'مزید جانیں') : text('تعليق · مشاركة', 'Comment · Share', 'تبصرہ · شیئر')}</div></>;
       break;
     case 'web':
-      mock = <>{status}<div className="scene-browser-bar" dir="ltr">🔒 https://account.example/login <span>⟳</span></div><div className="scene-web-body"><strong>{scene.title[lang]}</strong><div className="scene-login" aria-hidden><span>{text('اسم المستخدم', 'Username', 'صارف نام')}</span><span>••••••••</span><b>{text('تسجيل الدخول', 'Sign in', 'لاگ ان')}</b></div><div className="scene-account-activity">{scene.flags.map((flag) => <div key={flag.id}>{mark(flag.id)}</div>)}</div></div></>;
+      mock = <>{status}<div className="scene-browser-bar" dir="ltr"><span>🔒 https://account.example/login</span><span aria-hidden>⟳</span></div><div className="scene-web-body"><strong>{scene.title[lang]}</strong><div className="scene-login" aria-hidden><span>{text('اسم المستخدم', 'Username', 'صارف نام')}</span><span>••••••••</span><b>{text('تسجيل الدخول', 'Sign in', 'لاگ ان')}</b></div><div className="scene-account-activity">{scene.flags.map((flag) => <div key={flag.id}>{mark(flag.id)}</div>)}</div></div></>;
       break;
     case 'wifi':
       mock = <>{status}<div className="scene-wifi-heading"><strong>Wi-Fi</strong><span aria-hidden>●</span></div><div className="scene-network-list">{scene.flags.map((flag) => <div key={flag.id}>{mark(flag.id)}<span aria-hidden>🔓</span></div>)}<div><bdi>Home_Network</bdi><span aria-hidden>🔒</span></div></div></>;
       break;
     case 'qr':
-      mock = <div className="scene-poster"><span className="scene-poster-star" aria-hidden>🎁</span><strong>{scene.title[lang]}</strong><div>{mark('code', <><QR /><span className="sr-only">{scene.flags[0].content[lang]}</span></>, 'scene-qr-target')}</div><p>{mark('prize')}</p></div>;
+      mock = <>{status}<div className="scene-poster-heading"><span aria-hidden>▦</span><strong>{text('إعلان', 'Advertisement', 'اشتہار')}</strong><span aria-hidden>⋯</span></div><div className="scene-poster"><span className="scene-poster-star" aria-hidden>🎁</span><strong>{scene.title[lang]}</strong><div>{mark('code', <><QR /><span className="sr-only">{scene.flags[0].content[lang]}</span></>, 'scene-qr-target')}</div><p>{mark('prize')}</p></div></>;
       break;
     case 'receipt':
-      mock = <><div className="scene-receipt-heading"><span aria-hidden>🧾</span><strong>{scene.title[lang]}</strong><span dir="ltr">09:41</span></div><div className="scene-receipt-body"><strong dir="ltr">AED 1,000.00 ✓</strong><p>{mark('reference')}</p><div className="scene-message">💬 {mark('seller')} <span aria-hidden>✓✓</span></div></div></>;
+      mock = <>{status}<div className="scene-receipt-heading"><span aria-hidden>🧾</span><strong>{scene.title[lang]}</strong><span dir="ltr">09:41</span></div><div className="scene-receipt-body"><strong dir="ltr">AED 1,000.00 ✓</strong><p>{mark('reference')}</p><div className="scene-message">💬 {mark('seller')} <span aria-hidden>✓✓</span></div></div></>;
       break;
     case 'card':
       mock = <div className="scene-illustration"><div className="scene-orbit"><span className="scene-hero-icon" aria-hidden>{scene.artwork}</span>{scene.flags.map((flag, i) => <span key={flag.id} className={`scene-orbit-item scene-orbit-item--${i}`}>{mark(flag.id, <><span aria-hidden>{flag.content[lang].split(' ')[0]}</span><span className="sr-only">{flag.content[lang]}</span></>)}</span>)}</div><p>{scene.title[lang]}</p></div>;

@@ -277,7 +277,8 @@ body {
 .scene-inspection { position: relative; margin-top: 6px; font-size: 11px; line-height: 1.7; font-weight: 800; color: #135f3c; }
 .scene-tip { position: absolute; z-index: 20; display: flex; gap: 4px; width: 210px; max-width: calc(100% - 16px); border: 1px solid #b28c39; border-radius: 10px; padding: 8px 10px; background: #fff8e5; color: #513b11; font-size: 12px; line-height: 1.7; box-shadow: 0 4px 12px #4b341b26; animation: scene-fade 180ms ease-out; }
 .scene-tip-arrow { position: absolute; top: -5px; width: 8px; height: 8px; background: #fff8e5; border-top: 1px solid #b28c39; border-left: 1px solid #b28c39; transform: rotate(45deg); }
-.scene-tip button { align-self: flex-start; min-width: 24px; min-height: 24px; font-size: 18px; }
+.scene-tip { pointer-events: none; }
+.scene-tip button { pointer-events: auto; align-self: flex-start; min-width: 24px; min-height: 24px; font-size: 18px; }
 .scene-star-burst { position: absolute; inset-inline-end: 6px; top: -24px; color: #9f6800; font-size: 24px; pointer-events: none; animation: scene-star-burst 700ms ease-out both; }
 @keyframes scene-hotspot-pulse { 0%, 100% { opacity: .2; } 50% { opacity: .9; } }
 @keyframes scene-star-burst { from { opacity: 0; transform: scale(.6) translateY(8px); } 50% { opacity: 1; } to { opacity: 0; transform: scale(1.2) translateY(-20px); } }
@@ -342,4 +343,28 @@ body {
   .scene-feedback--correct, .scene-feedback--wrong { animation: scene-feedback-fade 500ms ease-out both; }
   .scene-hotspot::after, .shield-next .station-shield { animation: none; }
   .quiz-play [style*="burst"] { animation: scene-feedback-fade 500ms ease-out both !important; }
+}
+
+/* Round 2: complete app chrome and keep every discovered hotspot amber. */
+.scene-sender-note { display: block; color: #60788a; font-size: 8px; font-weight: 700; line-height: 1.35; }
+.scene-mail-from { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; }
+.scene-call-label { color: #526879; font-size: 9px; font-weight: 800; text-align: center; }
+.scene-social-header, .scene-poster-heading { display: flex; align-items: center; justify-content: space-between; min-height: 27px; padding: 3px 12px; border-block: 1px solid #dce7ef; background: #f4f8fb; color: #35546b; font-size: 11px; }
+.scene-device--social, .scene-device--ad { padding: 0 0 7px; overflow: hidden; }
+.scene-post-header { margin: 6px 10px 0; }
+.scene-post-body { margin-inline: 10px; }
+.scene-post-body p { min-width: 0; margin: 0; }
+.scene-post-cta { margin-inline: 10px; padding-block: 2px; }
+.scene-device--qr, .scene-device--receipt { border: 3px solid #8fa5b5; border-radius: 20px; overflow: hidden; }
+.scene-device--qr { background: #fffdf5; }
+.scene-device--receipt { background: #fff; }
+.scene-poster-heading { border-top: 0; }
+.scene-hotspot { padding: 0; background: transparent; color: inherit; font: inherit; line-height: inherit; }
+.scene-hotspot.scene-mail-link { display: inline-block; padding: 2px 12px; color: #145bb0; }
+.scene-hotspot.scene-qr-target { display: inline-block; }
+.scene-hotspot.scene-found { outline-color: #b37b13; }
+.scene-hotspot.scene-found::after { opacity: .2; animation: scene-hotspot-pulse 1.6s ease-in-out infinite; }
+.scene-found .scene-marker { border-color: #ad7512; background: #fff0c7; color: #684600; }
+@media (prefers-reduced-motion: reduce) {
+  .scene-hotspot::after, .scene-hotspot.scene-found::after { animation: none; }
 }

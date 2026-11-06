@@ -1830,6 +1830,7 @@ export default function Play() {
         </div>
 
         {revealed ? (
+          <>
           <div ref={revealRef} className="anim-in mt-auto pt-5">
             <Panel tone="green" className="relative p-5">
               <Burst />
@@ -1841,10 +1842,16 @@ export default function Play() {
               </p>
               <p className="ink-sm mt-3 text-xs font-bold leading-8">{copy.explanation}</p>
             </Panel>
-            <PixelButton size="lg" className="mt-3 w-full" onClick={next}>
+          </div>
+          <div
+            className="sticky bottom-0 z-10 pt-3"
+            style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.94) 45%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+          >
+            <PixelButton size="lg" className="w-full" onClick={next}>
               {q.n === quiz.total ? s.showResult : s.nextQuestion}
             </PixelButton>
           </div>
+          </>
         ) : (
           <div
             className="quiz-confirm sticky bottom-0 z-10 mt-auto pt-5"
