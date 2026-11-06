@@ -1,6 +1,5 @@
 import { chromium } from '/Users/ahmedalali/node_modules/playwright/index.mjs';
 import { mkdirSync } from 'fs';
-import { skipVideo } from './helpers.mjs';
 const S = new URL('./shots/resp/', import.meta.url).pathname;
 mkdirSync(S, { recursive: true });
 const BASE = process.env.BASE || 'http://localhost:3001';
@@ -67,13 +66,6 @@ for (const [name, w, h] of VIEWPORTS) {
   await p.getByRole('link', { name: /START/ }).click();
   await p.waitForURL('**/play');
   await p.waitForTimeout(300);
-  await noHScroll(p, name, 'brief');
-  await p.locator('main').click({ position: { x: 60, y: 200 } }).catch(() => {});
-  const briefCta = p.getByTestId('brief-cta');
-  await briefCta.waitFor({ timeout: 8000 });
-  await inView(p, briefCta, 'brief CTA (sticky)', name);
-  await briefCta.click();
-  await p.waitForTimeout(250);
   await noHScroll(p, name, 'age');
   await p.getByText('18–24 سنة', { exact: true }).click();
   await p.waitForTimeout(120);
@@ -82,17 +74,25 @@ for (const [name, w, h] of VIEWPORTS) {
   await cont.click();
   await p.waitForTimeout(250);
 
-  /* الفيديو التوعوي — ملء الشاشة بلا تخطٍّ */
-  await p.getByTestId('intro-video').waitFor({ timeout: 8000 });
-  await noHScroll(p, name, 'video');
-  await inView(p, p.getByTestId('intro-video'), 'intro video', name);
-  await skipVideo(p);
+  /* تمهيد سيف */
+  const briefCta = p.getByRole('button', { name: /هيا لنبدأ/ });
+  await briefCta.waitFor({ timeout: 8000 });
+  await noHScroll(p, name, 'briefing');
+  await inView(p, briefCta, 'briefing CTA', name);
+  await briefCta.click();
+  await p.waitForTimeout(250);
 
-  /* النوع */
+  /* النوع + بيانات اللاعب */
   await noHScroll(p, name, 'gender');
   await inView(p, p.getByText('ذكر', { exact: true }), 'gender card', name);
   await p.getByText('ذكر', { exact: true }).click();
-  await p.waitForTimeout(300);
+  await p.locator('input').first().fill('لاعب تجريبي');
+  // نموذج التسجيل طويل بطبيعته — الوصول للزر بالتمرير مقبول على الشاشات الصغيرة
+  const regCont = p.getByRole('button', { name: /متابعة/ }).last();
+  await regCont.scrollIntoViewIfNeeded();
+  await inView(p, regCont, 'register continue', name);
+  await regCont.click();
+  await p.waitForTimeout(400);
 
   /* البداية */
   await noHScroll(p, name, 'intro');

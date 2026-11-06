@@ -16,14 +16,8 @@ const AR = (g: Gender) => {
     onbGenderTitle: 'من أنت؟',
     onbGenderHint: 'نستخدم هذا لمخاطبتك بالصيغة الصحيحة فقط.',
     pickCharacter: 'اضغط على شخصيتك للاختيار',
-    briefName: 'سيف',
-    briefText:
-      'حماية المجتمع مسؤولية مشتركة، تبدأ بالوعي وتعززها اليقظة والمسؤولية. بتكاتفنا، نحافظ على أمن مجتمعنا الرقمي ونصنع بيئة أكثر أماناً لجميع أفراد المجتمع.',
-    briefCta: 'هيا لنبدأ!',
     onbAgeTitle: f ? 'كم عمركِ؟' : 'كم عمرك؟',
     onbAgeHint: 'يساعدنا هذا في تحسين التجربة وإعداد التقارير.',
-    videoTitle: f ? 'شاهدي هذه الرسالة التوعوية قبل أن نبدأ' : 'شاهد هذه الرسالة التوعوية قبل أن نبدأ',
-    videoTap: 'اضغط للتشغيل',
     ageGroups: [
       '12–17 سنة',
       '18–24 سنة',
@@ -40,6 +34,7 @@ const AR = (g: Gender) => {
     onbLangHint: 'يمكنك تغييرها في أي وقت.',
     arabic: 'العربية',
     english: 'English',
+    urdu: 'اردو',
     next: 'التالي',
     back: 'رجوع',
 
@@ -159,14 +154,8 @@ const EN = () => ({
   onbGenderTitle: 'Who are you?',
   onbGenderHint: 'Used only to address you correctly.',
   pickCharacter: 'Tap your character to choose',
-  briefName: 'Saif',
-  briefText:
-    'Protecting the community is a shared responsibility — it begins with awareness and grows through vigilance and accountability. Together, we safeguard our digital community and create a safer environment for everyone.',
-  briefCta: 'Got it — let\u2019s begin!',
   onbAgeTitle: 'How old are you?',
   onbAgeHint: 'This helps us improve the experience and reporting.',
-  videoTitle: 'Watch this awareness message before we start',
-  videoTap: 'Tap to play',
   ageGroups: [
     '12–17 years',
     '18–24 years',
@@ -183,6 +172,7 @@ const EN = () => ({
   onbLangHint: 'You can change this at any time.',
   arabic: 'العربية',
   english: 'English',
+  urdu: 'اردو',
   next: 'Next',
   back: 'Back',
 
@@ -275,10 +265,116 @@ const EN = () => ({
   sound: 'Sound',
 });
 
+const UR = () => ({
+  dir: 'rtl' as const,
+  appTitle: 'ڈیجیٹل آگاہی چیلنج',
+  appSubtitle: 'سائبر جرائم کا مقابلہ',
+
+  onbGenderTitle: 'آپ کون ہیں؟',
+  onbGenderHint: 'یہ صرف آپ کو درست انداز میں مخاطب کرنے کے لیے استعمال ہوتا ہے۔',
+  pickCharacter: 'اپنا کردار منتخب کرنے کے لیے دبائیں',
+  onbAgeTitle: 'آپ کی عمر کیا ہے؟',
+  onbAgeHint: 'اس سے ہمیں تجربہ اور رپورٹس بہتر بنانے میں مدد ملتی ہے۔',
+  ageGroups: ['12–17 سال', '18–24 سال', '25–34 سال', '35–44 سال', '45–54 سال', '55–64 سال', '65–70 سال', '70 سال سے زیادہ'],
+  male: 'مرد',
+  female: 'خاتون',
+  onbLangTitle: 'زبان منتخب کریں',
+  onbLangHint: 'آپ اسے کسی بھی وقت تبدیل کر سکتے ہیں۔',
+  arabic: 'العربية',
+  english: 'English',
+  urdu: 'اردو',
+  next: 'اگلا',
+  back: 'واپس',
+
+  play: 'چیلنج شروع کریں',
+  playSub: 'درجہ وار چیلنج · ایک زندگی',
+  presenter: 'پریزنٹر موڈ',
+  presenterSub: 'پیش کار کے لیے بڑی اسکرین',
+  levels: 'درجات',
+  prizes: 'انعامات',
+  correctAnswers: 'درست جوابات',
+  settings: 'ترتیبات',
+  changeChoices: 'زبان یا جنس تبدیل کریں',
+
+  ready: 'کیا آپ تیار ہیں؟',
+  rule1: 'ایک زندگی — ایک غلط جواب آپ کی کوشش ختم کر دیتا ہے۔',
+  rule2: 'آپ جتنی بار چاہیں دوبارہ کوشش کر سکتے ہیں۔',
+  rule3: 'آخر میں آپ درست جواب اور اس کی وجہ دیکھیں گے۔',
+  timer: 'سوال کا ٹائمر',
+  timerSub: 'ہر سوال کے لیے 45 سیکنڈ',
+  on: 'چالو',
+  off: 'بند',
+  start: 'شروع کریں',
+  getReady: 'تیار ہو جائیں…',
+  question: 'سوال',
+  of: 'میں سے',
+  pick: 'ایک جواب منتخب کریں',
+  confirm: 'جواب کی تصدیق کریں',
+  oneLife: 'خبردار: آپ کے پاس ایک زندگی ہے — غلط جواب کوشش ختم کر دیتا ہے۔',
+  correct: 'درست جواب!',
+  wellDone: 'بہت خوب — اب اگلے درجے کی طرف۔',
+  nextQuestion: 'اگلا سوال',
+  showResult: 'نتیجہ دیکھیں',
+  streak: 'مسلسل کامیابی',
+  stageClear: 'مرحلہ مکمل!',
+  stageClearM: 'مرحلہ مکمل!',
+  continue: 'جاری رکھیں',
+  goldenQuestion: 'سنہری سوال',
+  goldenHint: 'ڈیجیٹل ایکسپرٹ درجے میں داخل ہونے کے لیے اسے مکمل کریں — آخری چیلنج۔',
+  goldenHintKids: 'آخری سوال! درست جواب دے کر ڈیجیٹل آگاہی چیمپئن بنیں۔',
+  expertStage: 'ماہر مرحلہ — صرف سنہری سوال باقی ہے!',
+
+  gameOver: 'کوشش ختم',
+  wrongAnswer: 'غلط جواب',
+  timeUp: 'وقت ختم ہو گیا',
+  keepLearning: 'یاد رکھیں، مقصد صرف جیتنا نہیں بلکہ خود کو محفوظ رکھنا سیکھنا ہے۔',
+  yourScore: 'آپ کا اسکور',
+  reached: 'آپ یہاں تک پہنچے',
+  youPicked: 'آپ نے یہ منتخب کیا',
+  correctAnswer: 'درست جواب',
+  earned: 'آپ نے حاصل کیا',
+  newRecord: 'نیا ریکارڈ!',
+  bestScore: 'بہترین اسکور',
+  retry: 'دوبارہ کوشش کریں',
+  reviewMode: 'جائزہ موڈ',
+  reviewHint: 'تمام سوالات، جوابات اور وضاحتیں — مقابلے سے باہر اور اسکور میں شامل نہیں۔',
+  reviewAll: 'تمام سوالات کا جائزہ',
+  finish: 'ختم کریں',
+  menu: 'مرکزی مینو',
+  youWin: 'آپ جیت گئے!',
+  champion: 'ڈیجیٹل آگاہی چیمپئن',
+  winLine: 'آپ نے ثابت کیا کہ ڈیجیٹل آگاہی سائبر جرائم کے خلاف پہلی دفاعی لائن ہے۔',
+  rank: 'لقب',
+
+  shareResult: 'نتیجہ شیئر کریں',
+  shareTextWin: 'میں نے مکمل نمبر حاصل کر کے ”ڈیجیٹل آگاہی چیمپئن“ کا لقب جیتا! آپ بھی آزمائیں:',
+  copied: 'لنک کاپی ہو گیا ✓',
+
+  getCertificate: 'اپنا سرٹیفکیٹ حاصل کریں',
+  yourCertificate: 'تعریفی سرٹیفکیٹ',
+  nameLabel: 'سرٹیفکیٹ پر دکھانے کے لیے نام',
+  namePlaceholder: 'اپنا نام لکھیں',
+  download: 'سرٹیفکیٹ ڈاؤن لوڈ کریں',
+  close: 'بند کریں',
+  certNote: 'ڈیجیٹل سرٹیفکیٹ — سرکاری ثبوت کے طور پر قابل استعمال نہیں۔',
+  certAwarded: 'یہ تصدیق کی جاتی ہے کہ',
+  certBody: 'نے ڈیجیٹل آگاہی چیلنج میں حصہ لیا اور درست جواب دیے',
+  certBodyF: 'نے ڈیجیٹل آگاہی چیلنج میں حصہ لیا اور درست جواب دیے',
+  certTail: 'مقابلے کے سوالات میں سے، اور انہیں دیا جاتا ہے',
+  certTailF: 'مقابلے کے سوالات میں سے، اور انہیں دیا جاتا ہے',
+
+  slogan: 'رکیں .. تصدیق کریں .. پھر عمل کریں',
+  closing: ['اپنی خفیہ معلومات شیئر نہ کریں۔', 'نامعلوم لنکس پر بھروسا نہ کریں۔', 'تصدیق سے پہلے رقم منتقل نہ کریں۔', 'ثبوت محفوظ رکھیں اور دھوکا دہی کی اطلاع دیں۔'],
+  tagline: '”آگاہی حفاظت کرتی ہے — ذمہ دار معاشرہ“',
+  sound: 'آواز',
+});
+
 export type Strings = ReturnType<typeof EN>;
 
 export function t(lang: Lang, gender: Gender | null): Strings {
-  return lang === 'en' ? EN() : (AR(gender ?? 'male') as unknown as Strings);
+  if (lang === 'en') return EN();
+  if (lang === 'ur') return UR() as unknown as Strings;
+  return AR(gender ?? 'male') as unknown as Strings;
 }
 
 /** نصوص المقدّم — كما وردت حرفياً من الجهة المنظمة */
@@ -292,19 +388,20 @@ export const HOST_SCRIPT = {
   win: 'مبروك! أثبتَّ أن الوعي الرقمي هو خط الدفاع الأول ضد الجرائم الإلكترونية.',
 };
 
-export const KIDS_MILESTONES: Record<number, { ar: string; en: string }> = {
-  3: { ar: '🎉 أحسنت! اجتزت المستوى الأول.', en: '🎉 Level one cleared!' },
-  6: { ar: '🔥 رائع! اقتربت من السؤال الذهبي.', en: '🔥 Awesome! The Golden Question is near.' },
+export const KIDS_MILESTONES: Record<number, { ar: string; en: string; ur: string }> = {
+  3: { ar: '🎉 أحسنت! اجتزت المستوى الأول.', en: '🎉 Level one cleared!', ur: '🎉 بہت خوب! پہلا درجہ مکمل ہو گیا۔' },
+  6: { ar: '🔥 رائع! اقتربت من السؤال الذهبي.', en: '🔥 Awesome! The Golden Question is near.', ur: '🔥 شاباش! سنہری سوال قریب ہے۔' },
 };
 
-export const MILESTONES: Record<number, { ar: string; en: string }> = {
-  5: { ar: '🎉 أحسنت! لقد اجتزت المستوى الأول.', en: '🎉 Level one cleared!' },
-  10: { ar: '🏅 مبروك! وصلت إلى المستوى الثالث.', en: '🏅 You reached level three!' },
-  15: { ar: '🏅 أحسنت! اجتزت المستوى المتقدم.', en: '🏅 Advanced level cleared!' },
-  17: { ar: '🔥 أنت الآن على بُعد خمسة أسئلة فقط من الجائزة!', en: '🔥 Only five questions from the prize!' },
+export const MILESTONES: Record<number, { ar: string; en: string; ur: string }> = {
+  5: { ar: '🎉 أحسنت! لقد اجتزت المستوى الأول.', en: '🎉 Level one cleared!', ur: '🎉 بہت خوب! پہلا درجہ مکمل ہو گیا۔' },
+  10: { ar: '🏅 مبروك! وصلت إلى المستوى الثالث.', en: '🏅 You reached level three!', ur: '🏅 مبارک ہو! آپ تیسرے درجے تک پہنچ گئے۔' },
+  15: { ar: '🏅 أحسنت! اجتزت المستوى المتقدم.', en: '🏅 Advanced level cleared!', ur: '🏅 بہت خوب! اعلیٰ درجہ مکمل ہو گیا۔' },
+  17: { ar: '🔥 أنت الآن على بُعد خمسة أسئلة فقط من الجائزة!', en: '🔥 Only five questions from the prize!', ur: '🔥 انعام تک صرف پانچ سوال باقی ہیں!' },
   20: {
     ar: '🏆 اجتزت السؤال الذهبي! بقي سؤالان في مستوى الخبير الرقمي.',
     en: '🏆 Golden Question cleared! Two questions left in the Digital Expert level.',
+    ur: '🏆 سنہری سوال مکمل! ڈیجیٹل ایکسپرٹ درجے میں دو سوال باقی ہیں۔',
   },
-  22: { ar: '🎉 مبروك! أنت الآن «بطل الوعي الرقمي».', en: '🎉 You are now the Digital Awareness Champion!' },
+  22: { ar: '🎉 مبروك! أنت الآن «بطل الوعي الرقمي».', en: '🎉 You are now the Digital Awareness Champion!', ur: '🎉 مبارک ہو! اب آپ ڈیجیٹل آگاہی چیمپئن ہیں!' },
 };

@@ -23,40 +23,64 @@ export const pickCorrect = (page, i, arr) =>
 export const pickWrong = (page, i, arr) =>
   page.getByTestId('option').filter({ hasNotText: arr[i] }).first().click();
 
-/** تمهيد الضابط سيف: أكمل النص بنقرة ثم تابع */
-export const passBrief = async (page) => {
-  await page.locator('main').click({ position: { x: 60, y: 200 } }).catch(() => {});
-  await page.getByTestId('brief-cta').click({ timeout: 8000 });
+export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
+  await page.getByText(bracket, { exact: true }).click();
+  await page.getByRole('button', { name: 'متابعة' }).click();
+  await page.waitForTimeout(250);
+};
+export const pickAgeEn = async (page, bracket = '18–24 years') => {
+  await page.getByText(bracket, { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForTimeout(250);
 };
 
-/** بعد اختيار العمر يظهر فيديو توعوي بلا زر تخطٍّ — تحقّق من مصدره ثم اقفز لقرب نهايته ليُطلق onEnded */
-export const skipVideo = async (page, kids = false, en = false) => {
+/* ——— التدفق المعتمد بعد دمج نسخة الجهة (2026-11-06) ———
+   العمر → تمهيد سيف (صوت تلقائي) → النوع + الاسم (إجباري) → البداية */
+export const passOnboardingAr = async (page, { bracket = '18–24 سنة', gender = 'ذكر', name = 'لاعب تجريبي' } = {}) => {
+  await page.getByText(bracket, { exact: true }).click();
+  await page.getByRole('button', { name: 'متابعة' }).click();
+  await page.getByRole('button', { name: /هيا لنبدأ/ }).click({ timeout: 8000 });
+  await page.getByText(gender, { exact: true }).click();
+  await page.locator('input').first().fill(name);
+  await page.getByRole('button', { name: /متابعة/ }).last().click();
+  await page.getByRole('button', { name: /ابدأ/ }).waitFor({ timeout: 8000 });
+};
+
+export const startGame = async (page) => {
+  await page.getByRole('button', { name: /ابدأ/ }).click();
+  await page.getByTestId('option').first().waitFor({ timeout: 15000 });
+};
+
+/* إجابة صحيحة واحدة مع تجاوز شاشات الإنجاز والسؤال الذهبي */
+export const answerCorrect = async (page, text) => {
+  await page.getByTestId('option').first().waitFor({ timeout: 15000 });
+  await page.getByTestId('option').filter({ hasText: text }).first().click();
+  const confirm = page.getByRole('button', { name: /تأكيد|Confirm/ }).first();
+  if (await confirm.isVisible().catch(() => false)) await confirm.click();
+  await page.waitForTimeout(500);
+  const next = page.getByRole('button', { name: /التالي|Next/ }).first();
+  if (await next.isVisible().catch(() => false)) await next.click();
+  const cont = page.getByRole('button', { name: /متابعة|Continue/ }).first();
+  if (await cont.isVisible().catch(() => false)) await cont.click().catch(() => {});
+  await page.keyboard.press('Enter').catch(() => {});
+  await page.waitForTimeout(300);
+};
+
+/* الفيديو التوعوي بعد الفوز: تحقّق من المصدر ثم اقفز لقرب النهاية */
+export const fastForwardVideo = async (page, kids = false) => {
   const vid = page.getByTestId('intro-video');
-  await vid.waitFor({ timeout: 8000 });
+  await vid.waitFor({ timeout: 10000 });
   const src = await vid.getAttribute('src');
-  const want = `intro-${kids ? 'kids' : 'adult'}${en ? '-en' : ''}.mp4`;
-  if (!src?.includes(want)) throw new Error(`intro video src=${src}, expected ${want}`);
+  const want = kids ? 'intro-kids.mp4' : 'intro-adult.mp4';
+  if (!src?.includes(want)) throw new Error(`video src=${src}, expected ${want}`);
   await vid.evaluate(async (v) => {
     if (!isFinite(v.duration)) {
       await new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true }));
     }
     v.muted = true;
-    v.currentTime = Math.max(0, v.duration - 0.3);
+    v.currentTime = Math.max(0, v.duration - 0.4);
     await v.play().catch(() => {});
   });
   await vid.waitFor({ state: 'detached', timeout: 10000 });
-  await page.waitForTimeout(150);
-};
-
-export const pickAgeAr = async (page, bracket = '18–24 سنة') => {
-  await page.getByText(bracket, { exact: true }).click();
-  await page.getByRole('button', { name: 'متابعة' }).click();
-  await skipVideo(page, bracket.startsWith('12'));
-};
-export const pickAgeEn = async (page, bracket = '18–24 years') => {
-  await page.getByText(bracket, { exact: true }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  // الدبلجة الإنجليزية موقوفة حالياً — الفيديو العربي يُعرض للغتين
-  await skipVideo(page, bracket.startsWith('12'));
+  await page.waitForTimeout(200);
 };

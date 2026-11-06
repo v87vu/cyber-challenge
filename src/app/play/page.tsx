@@ -2,25 +2,34 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { LETTERS, getQuiz, quizCertificateTitle, quizLevelOf, quizRewardFor } from '@/lib/questions';
+import { LETTERS, getQuiz, questionCopy, quizCertificateTitle, quizLevelOf, quizRewardFor } from '@/lib/questions';
 import { KIDS_MILESTONES, MILESTONES } from '@/lib/i18n';
 import { usePrefs } from '@/lib/usePrefs';
 import Shell from '@/components/Shell';
 import Mascot, { type Mood } from '@/components/Mascot';
 import Burst from '@/components/Burst';
 import Certificate from '@/components/Certificate';
+import AiReviewChat, { type ReviewMistake } from '@/components/AiReviewChat';
 import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
-import { AGE_GROUPS, setAge, setGender, type AgeGroup, type Gender } from '@/lib/prefs';
+import { AGE_GROUPS, setAge, setEmail, setGender, setName, setPhone, type AgeGroup, type Gender } from '@/lib/prefs';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
-type Phase = 'brief' | 'gender' | 'age' | 'video' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review';
+type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey';
+
+type AnswerAttempt = {
+  questionNumber: number;
+  selectedOption: number | null;
+  correctOption: number;
+  isCorrect: boolean;
+  timedOut: boolean;
+  timeSpentSeconds: number;
+};
 
 const TIME = 45;
 const COUNT_FROM = 3;
 const QUIZ_KIDS = getQuiz(true);
 const QUIZ_ADULT = getQuiz(false);
-
 /* خلط فيشر–ييتس — يُستدعى عند بدء كل جولة فقط (لا أثناء الرسم) */
 function shuffled(): number[] {
   const a = [0, 1, 2, 3];
@@ -31,13 +40,36 @@ function shuffled(): number[] {
   return a;
 }
 
+function validEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function devicePlayerId() {
+  const key = 'dac-device-player-id';
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+
+    const created = crypto.randomUUID();
+    localStorage.setItem(key, created);
+    return created;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 export default function Play() {
-  const { gender, lang, age, s } = usePrefs();
+  const { gender, lang, age, name: playerName, email: playerEmail, phone: playerPhone, s } = usePrefs();
   const quiz = age === '12-17' ? QUIZ_KIDS : QUIZ_ADULT;
   const MS = age === '12-17' ? KIDS_MILESTONES : MILESTONES;
-  const [phase, setPhase] = useState<Phase>('brief');
-  const [briefWords, setBriefWords] = useState(0);
-  const [briefPose, setBriefPose] = useState(1);
+  const ageLabel = age ? s.ageGroups[AGE_GROUPS.indexOf(age)] : '';
+  const playerIdleAvatar =
+    gender === 'female'
+      ? '/avatar-female-idle.png'
+      : age === '12-17'
+        ? '/avatar-boy-idle.png'
+        : '/avatar-man-idle.png';
+  const [phase, setPhase] = useState<Phase>('age');
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [timerOn, setTimerOn] = useState(true);
@@ -49,16 +81,204 @@ export default function Play() {
   // ترتيب عرض الخيارات لكل سؤال — يتجدد عشوائياً في كل جولة
   const [order, setOrder] = useState<number[][]>([]);
   const [agePick, setAgePick] = useState<AgeGroup | null>(null);
+  const [nameInput, setNameInput] = useState(playerName);
+  const [emailInput, setEmailInput] = useState(playerEmail);
+  const [phoneInput, setPhoneInput] = useState(playerPhone);
+  const [attempts, setAttempts] = useState<AnswerAttempt[]>([]);
+  const [wrongAttempt, setWrongAttempt] = useState(false);
+  const [reviewComplete, setReviewComplete] = useState(false);
+  const [videoComplete, setVideoComplete] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoError, setVideoError] = useState(false);
   const [videoTap, setVideoTap] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const introVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [fraudExperience, setFraudExperience] = useState<'yes' | 'no' | null>(null);
+  const [fraudDetails, setFraudDetails] = useState('');
+  const [extortionExperience, setExtortionExperience] = useState<'yes' | 'no' | null>(null);
+  const [extortionDetails, setExtortionDetails] = useState('');
+  const [briefingVoiceLoading, setBriefingVoiceLoading] = useState(false);
+  const [briefingVoiceError, setBriefingVoiceError] = useState(false);
+  const [briefingSpeaking, setBriefingSpeaking] = useState(false);
+  const [briefingPose, setBriefingPose] = useState(1);
+  const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const briefingAudioUrlRef = useRef<string | null>(null);
+  const briefingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const mute = useSyncExternalStore(subscribeMuted, mutedSnapshot, mutedServerSnapshot);
   const revealRef = useRef<HTMLDivElement>(null);
+  const attemptStartedAt = useRef(Date.now());
+  const playerIdRef = useRef('');
+  const gameIdRef = useRef('');
+  const registeredNameRef = useRef('');
+  const registeredEmailRef = useRef('');
+  const registeredPhoneRef = useRef('');
+  const gameStartedAt = useRef(Date.now());
+  const analyticsSent = useRef(false);
   const bestPair = useSyncExternalStore(subscribeBest, bestSnapshot, bestServerSnapshot);
   const best = quiz.kids ? bestPair.kids : bestPair.adult;
 
+  const briefingText =
+    lang === 'ar'
+      ? 'حماية المجتمع مسؤولية مشتركة تبدأ بالوعي وتعززها اليقظة والمسؤولية. بتكاتفنا، نحافظ على أمن مجتمعنا الرقمي ونصنع بيئة أكثر أمانًا لجميع أفراد المجتمع.'
+      : lang === 'ur'
+        ? 'معاشرے کی حفاظت ایک مشترکہ ذمہ داری ہے جو آگاہی سے شروع ہوتی ہے اور ہوشیاری اور ذمہ داری سے مضبوط ہوتی ہے۔ مل کر ہم اپنے ڈیجیٹل معاشرے کو محفوظ رکھتے ہیں اور سب کے لیے زیادہ محفوظ ماحول بناتے ہیں۔'
+        : 'Protecting our community is a shared responsibility that begins with awareness and is strengthened by vigilance and responsibility. Together, we protect our digital community and create a safer environment for everyone.';
+
+  const stopBriefingVoice = useCallback(() => {
+    if (briefingAudioRef.current) {
+      briefingAudioRef.current.pause();
+      briefingAudioRef.current.currentTime = 0;
+      setBriefingSpeaking(false);
+      briefingAudioRef.current = null;
+    }
+    if (briefingAudioUrlRef.current) {
+      URL.revokeObjectURL(briefingAudioUrlRef.current);
+      briefingAudioUrlRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    briefingUtteranceRef.current = null;
+  }, []);
+
+  const playBriefingVoice = useCallback(async () => {
+    stopBriefingVoice();
+    setBriefingVoiceError(false);
+    setBriefingVoiceLoading(true);
+
+    const playDeviceFallback = () => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setBriefingVoiceError(true);
+        setBriefingVoiceLoading(false);
+        return;
+      }
+
+      const synth = window.speechSynthesis;
+      const utterance = new SpeechSynthesisUtterance(briefingText);
+      briefingUtteranceRef.current = utterance;
+
+      utterance.lang = lang === 'ar' ? 'ar-AE' : lang === 'ur' ? 'ur-PK' : 'en-US';
+      utterance.rate = lang === 'ar' ? 0.9 : 0.94;
+      utterance.pitch = 0.96;
+      utterance.volume = 1;
+
+      const voices = synth.getVoices();
+      const prefix = lang === 'ar' ? 'ar' : lang === 'ur' ? 'ur' : 'en';
+      const matching = voices.find((voice) => voice.lang?.toLowerCase().startsWith(prefix));
+      if (matching) utterance.voice = matching;
+
+      utterance.onstart = () => {
+        setBriefingVoiceLoading(false);
+        setBriefingSpeaking(true);
+      };
+      utterance.onend = () => {
+        setBriefingSpeaking(false);
+        briefingUtteranceRef.current = null;
+      };
+      utterance.onerror = () => {
+        setBriefingVoiceLoading(false);
+        setBriefingSpeaking(false);
+        setBriefingVoiceError(true);
+        briefingUtteranceRef.current = null;
+      };
+
+      try {
+        synth.cancel();
+        synth.speak(utterance);
+        window.setTimeout(() => {
+          if (!synth.speaking) setBriefingVoiceLoading(false);
+        }, 1200);
+      } catch {
+        setBriefingVoiceLoading(false);
+        setBriefingVoiceError(true);
+      }
+    };
+
+    let lastStatus = 0;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch('/api/text-to-speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            text: briefingText,
+            lang,
+            voiceProfile: 'adult-male',
+          }),
+        });
+
+        lastStatus = response.status;
+        if (!response.ok) throw new Error(`TTS ${response.status}`);
+
+        const blob = await response.blob();
+        if (!blob.size || !blob.type.startsWith('audio/')) {
+          throw new Error('Invalid audio');
+        }
+
+        const url = URL.createObjectURL(blob);
+        briefingAudioUrlRef.current = url;
+
+        const audio = new Audio(url);
+        briefingAudioRef.current = audio;
+        audio.preload = 'auto';
+
+        audio.onplaying = () => {
+          setBriefingVoiceLoading(false);
+          setBriefingSpeaking(true);
+        };
+        audio.onended = () => {
+          setBriefingSpeaking(false);
+          briefingAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setBriefingSpeaking(false);
+          playDeviceFallback();
+        };
+
+        await audio.play();
+        return;
+      } catch (error) {
+        if (attempt === 0 && lastStatus === 429) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1400));
+          continue;
+        }
+      }
+    }
+
+    // Gemini failed: use the device only as a backup so the page still speaks.
+    playDeviceFallback();
+  }, [briefingText, lang, stopBriefingVoice]);
+
+  useEffect(() => {
+    if (phase !== 'briefing') {
+      stopBriefingVoice();
+      return;
+    }
+
+    void playBriefingVoice();
+
+    return () => {
+      stopBriefingVoice();
+    };
+  }, [phase, playBriefingVoice, stopBriefingVoice]);
+
+  useEffect(() => {
+    if (phase !== 'briefing' || !briefingSpeaking) {
+      setBriefingPose(1);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setBriefingPose((current) => (current >= 5 ? 1 : current + 1));
+    }, 900);
+
+    return () => window.clearInterval(timer);
+  }, [phase, briefingSpeaking]);
+
   const q = quiz.questions[idx];
-  const copy = lang === 'ar' ? q.ar : q.en;
+  const copy = questionCopy(q, lang);
   const ord = order[idx] ?? [0, 1, 2, 3];
   const correctDisplay = ord.indexOf(q.correct);
   const level = quizLevelOf(quiz, q.n);
@@ -68,6 +288,64 @@ export default function Play() {
   const score = phase === 'won' ? quiz.total : idx;
   const streak = idx;
 
+  const reviewMistakes: ReviewMistake[] = quiz.questions.flatMap((item) => {
+    const wrongAttempts = attempts.filter(
+      (attempt) => attempt.questionNumber === item.n && !attempt.isCorrect,
+    );
+    if (wrongAttempts.length === 0) return [];
+
+    const itemCopy = questionCopy(item, lang);
+    const selectedAnswers = Array.from(
+      new Set(
+        wrongAttempts.map((attempt) =>
+          attempt.selectedOption === null
+            ? lang === 'ar'
+              ? 'انتهى الوقت دون إجابة'
+              : lang === 'ur'
+                ? 'وقت ختم ہو گیا اور جواب نہیں دیا گیا'
+                : 'Time expired without an answer'
+            : itemCopy.options[attempt.selectedOption],
+        ),
+      ),
+    );
+
+    return [
+      {
+        questionNumber: item.n,
+        question: itemCopy.text,
+        selectedAnswers,
+        correctAnswer: itemCopy.options[item.correct],
+        explanation: itemCopy.explanation,
+      },
+    ];
+  });
+
+  const saveAttempt = useCallback(
+    (pickedDisplayIndex: number | null, timedOut = false) => {
+      const selectedOption =
+        pickedDisplayIndex === null ? null : (ord[pickedDisplayIndex] ?? null);
+      const timeSpentSeconds = Math.max(
+        1,
+        Math.ceil((Date.now() - attemptStartedAt.current) / 1000),
+      );
+
+      setAttempts((current) => [
+        ...current,
+        {
+          questionNumber: q.n,
+          selectedOption,
+          correctOption: q.correct,
+          isCorrect: selectedOption === q.correct,
+          timedOut,
+          timeSpentSeconds,
+        },
+      ]);
+
+      attemptStartedAt.current = Date.now();
+    },
+    [ord, q.correct, q.n],
+  );
+
   const mood: Mood =
     phase === 'lost' ? 'ko'
     : phase === 'won' ? 'win'
@@ -75,27 +353,30 @@ export default function Play() {
     : phase === 'question' ? 'think'
     : 'idle';
 
-  const lose = useCallback(() => {
-    sfx.wrong();
-    setNewBest(recordScore(idx, quiz.kids));
-    setPhase('lost');
-  }, [idx, quiz.kids]);
-
   const advance = useCallback(() => {
     const nextIdx = idx + 1;
     setIdx(nextIdx);
     setSelected(null);
+    setWrongAttempt(false);
     setLeft(TIME);
     setPhase(quiz.questions[nextIdx]?.n === quiz.golden ? 'golden' : 'question');
   }, [idx, quiz]);
 
   const confirm = useCallback(() => {
     if (selected === null) return;
+    saveAttempt(selected);
+
     if (selected === correctDisplay) {
       sfx.correct();
+      setWrongAttempt(false);
       setPhase('correct');
-    } else lose();
-  }, [selected, correctDisplay, lose]);
+    } else {
+      sfx.wrong();
+      setWrongAttempt(true);
+      setSelected(null);
+      setLeft(TIME);
+    }
+  }, [selected, correctDisplay, saveAttempt]);
 
   const next = useCallback(() => {
     if (q.n === quiz.total) {
@@ -126,21 +407,226 @@ export default function Play() {
     } catch {}
   }, [s]);
 
+  const saveGameState = useCallback(
+    async (extra: {
+      completed?: boolean;
+      certificateRequested?: boolean;
+      certificateSent?: boolean;
+      fraudExperience?: 'yes' | 'no' | null;
+      fraudDetails?: string;
+      extortionExperience?: 'yes' | 'no' | null;
+      extortionDetails?: string;
+    } = {}) => {
+      const savedName = registeredNameRef.current.trim() || playerName.trim();
+      const savedEmail = registeredEmailRef.current.trim() || playerEmail.trim();
+      const savedPhone = registeredPhoneRef.current.trim() || playerPhone.trim();
+
+      if (
+        !age ||
+        !gender ||
+        !savedName ||
+        (savedEmail && !validEmail(savedEmail)) ||
+        !playerIdRef.current ||
+        !gameIdRef.current
+      ) {
+        return;
+      }
+
+      const payload = {
+        playerId: playerIdRef.current,
+        gameId: gameIdRef.current,
+        playerName: savedName,
+        playerEmail: savedEmail,
+        playerPhone: savedPhone,
+        lang,
+        ageGroup: age,
+        gender,
+        quizType: quiz.kids ? 'kids' : 'adult',
+        score: extra.completed ? quiz.total : Math.min(idx, quiz.total),
+        total: quiz.total,
+        durationSeconds: Math.max(0, Math.round((Date.now() - gameStartedAt.current) / 1000)),
+        completed: extra.completed === true,
+        certificateRequested: extra.certificateRequested === true,
+        certificateSent: extra.certificateSent === true,
+        fraudExperience: extra.fraudExperience ?? null,
+        fraudDetails: extra.fraudDetails ?? '',
+        extortionExperience: extra.extortionExperience ?? null,
+        extortionDetails: extra.extortionDetails ?? '',
+        attempts,
+      };
+
+      let lastError: unknown = null;
+
+      for (let saveTry = 0; saveTry < 3; saveTry += 1) {
+        try {
+          const response = await fetch('/api/game-results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            cache: 'no-store',
+            body: JSON.stringify(payload),
+          });
+
+          if (response.ok) return;
+
+          const detail = await response.text().catch(() => '');
+          lastError = new Error(`Game state save failed (${response.status}) ${detail}`);
+        } catch (error) {
+          lastError = error;
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 350 * (saveTry + 1)));
+      }
+
+      console.error('Game state save failed after retries:', lastError);
+      throw lastError instanceof Error ? lastError : new Error('Game state save failed');
+    },
+    [age, gender, playerName, playerEmail, playerPhone, lang, quiz.kids, quiz.total, idx, attempts],
+  );
+
+  useEffect(() => {
+    if (
+      phase !== 'survey' ||
+      !age ||
+      !gender ||
+      !gameIdRef.current ||
+      (fraudExperience === null && extortionExperience === null)
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void saveGameState({
+        completed: true,
+        fraudExperience,
+        fraudDetails: fraudExperience === 'yes' ? fraudDetails : '',
+        extortionExperience,
+        extortionDetails: extortionExperience === 'yes' ? extortionDetails : '',
+      }).catch((error) => {
+        console.error('Survey autosave failed:', error);
+      });
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    phase,
+    age,
+    gender,
+    fraudExperience,
+    fraudDetails,
+    extortionExperience,
+    extortionDetails,
+    saveGameState,
+  ]);
+
+  const finishReview = useCallback(() => {
+    setReviewComplete(true);
+    setPhase('video');
+  }, []);
+
+  const finishVideo = useCallback(() => {
+    setVideoError(false);
+    setVideoComplete(true);
+    setVideoProgress(100);
+    setPhase('survey');
+    sfx.win();
+  }, []);
+
+  // تشغيل الفيديو التوعوي المحلي تلقائياً — وإن منعه المتصفح نعرض زر التشغيل
+  useEffect(() => {
+    if (phase !== 'video') return;
+    introVideoRef.current?.play().catch(() => setVideoTap(true));
+  }, [phase]);
+
+  const failVideo = useCallback(() => {
+    setVideoError(true);
+  }, []);
+
   const begin = useCallback(() => {
+    const savedName = registeredNameRef.current.trim() || nameInput.trim() || playerName.trim();
+    const savedEmail = registeredEmailRef.current.trim() || emailInput.trim() || playerEmail.trim();
+    const savedPhone = registeredPhoneRef.current.trim() || phoneInput.trim() || playerPhone.trim();
+
+    registeredNameRef.current = savedName;
+    registeredEmailRef.current = savedEmail;
+    registeredPhoneRef.current = savedPhone;
+
+    if (!playerIdRef.current) playerIdRef.current = devicePlayerId();
+    if (!gameIdRef.current) {
+      gameIdRef.current = crypto.randomUUID();
+    }
+    gameStartedAt.current = Date.now();
+    analyticsSent.current = false;
+
+    if (age && gender && savedName && (!savedEmail || validEmail(savedEmail))) {
+      void fetch('/api/game-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        cache: 'no-store',
+        body: JSON.stringify({
+          playerId: playerIdRef.current,
+          gameId: gameIdRef.current,
+          playerName: savedName,
+          playerEmail: savedEmail,
+          playerPhone: savedPhone,
+          lang,
+          ageGroup: age,
+          gender,
+          quizType: quiz.kids ? 'kids' : 'adult',
+          score: 0,
+          total: quiz.total,
+          durationSeconds: 0,
+          completed: false,
+          attempts: [],
+        }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          console.error('Initial player save failed:', response.status, await response.text().catch(() => ''));
+        }
+      }).catch((error) => {
+        console.error('Initial player save failed:', error);
+      });
+    }
     setOrder(quiz.questions.map(() => shuffled()));
     setIdx(0);
     setSelected(null);
+    setAttempts([]);
+    setWrongAttempt(false);
+    setReviewComplete(false);
+    setVideoComplete(false);
+    setVideoProgress(0);
+    setVideoError(false);
+    setFraudExperience(null);
+    setFraudDetails('');
+    setExtortionExperience(null);
+    setExtortionDetails('');
+    setCert(false);
     setLeft(TIME);
     setCount(COUNT_FROM);
     setNewBest(false);
     setPhase('countdown');
-  }, [quiz]);
+  }, [age, gender, lang, emailInput, nameInput, phoneInput, playerEmail, playerName, playerPhone, quiz]);
 
-  // تشغيل الفيديو التوعوي تلقائياً — وإن منعه المتصفح نعرض زر التشغيل
+  // يحفظ اكتمال الجولة فورًا مع إعادة المحاولة عند تعذر الحفظ مؤقتًا.
   useEffect(() => {
-    if (phase !== 'video') return;
-    videoRef.current?.play().catch(() => setVideoTap(true));
-  }, [phase]);
+    if (phase !== 'won' || analyticsSent.current || !age || !gender || !gameIdRef.current) return;
+    analyticsSent.current = true;
+
+    void saveGameState({ completed: true }).catch((error) => {
+      console.error('Completed game save failed:', error);
+      analyticsSent.current = false;
+    });
+  }, [phase, age, gender, saveGameState]);
+
+  // يبدأ حساب وقت المحاولة عند ظهور السؤال، ويحفظ السجل مؤقتاً للمراجعة والتقارير.
+  useEffect(() => {
+    if (phase === 'question') attemptStartedAt.current = Date.now();
+  }, [phase, idx]);
+
+  useEffect(() => {
+    sessionStorage.setItem('cyberChallengeAttempts', JSON.stringify(attempts));
+  }, [attempts]);
 
   // العدّ التنازلي قبل السؤال الأول
   useEffect(() => {
@@ -157,13 +643,16 @@ export default function Play() {
     return () => clearTimeout(t);
   }, [phase, count]);
 
-  // مؤقّت السؤال — انتهاء الوقت يُحتسب خسارة
+  // مؤقّت السؤال — انتهاء الوقت يُسجّل كمحاولة خاطئة ويعيد السؤال نفسه.
   useEffect(() => {
     if (phase !== 'question' || !timerOn || left <= 0) return;
     const t = setTimeout(() => {
       if (left <= 1) {
+        sfx.wrong();
+        saveAttempt(null, true);
         setSelected(null);
-        lose();
+        setWrongAttempt(true);
+        setLeft(TIME);
       } else {
         const tickAt = level.id >= 4 ? 10 : level.id === 3 ? 8 : 6;
         if (left <= tickAt) sfx.tick();
@@ -171,32 +660,7 @@ export default function Play() {
       }
     }, 1000);
     return () => clearTimeout(t);
-  }, [phase, timerOn, left, lose, level.id]);
-
-  // التمهيد: سيف يتحدث — كتابة كلمة كلمة وتبديل وقفاته أثناء الكلام
-  const briefTotal = s.briefText.split(' ').length;
-  const briefDone = briefWords >= briefTotal;
-  useEffect(() => {
-    if (phase !== 'brief') return;
-    // حمّل الوقفات مسبقاً
-    for (let i = 1; i <= 5; i++) {
-      const img = new window.Image();
-      img.src = `/art/saif-${i}.png`;
-    }
-  }, [phase]);
-  useEffect(() => {
-    if (phase !== 'brief' || briefDone) return;
-    const t = setTimeout(() => setBriefWords((w) => w + 1), 150);
-    return () => clearTimeout(t);
-  }, [phase, briefWords, briefDone]);
-  useEffect(() => {
-    if (phase !== 'brief' || briefDone) return;
-    const speaking = [4, 3, 2, 1, 5];
-    const t = setInterval(() => {
-      setBriefPose((p_) => speaking[(speaking.indexOf(p_) + 1) % speaking.length] ?? 2);
-    }, 1200);
-    return () => clearInterval(t);
-  }, [phase, briefDone]);
+  }, [phase, timerOn, left, saveAttempt, level.id]);
 
   // الاحتفال الذهبي: دحرجة طبول ثم يبدأ السؤال تلقائياً
   useEffect(() => {
@@ -269,11 +733,91 @@ export default function Play() {
       <span className="pixel text-[9px]" dir="ltr">
         MENU
       </span>
-      {lang === 'ar' && <span>{s.menu}</span>}
+      {lang !== 'en' && <span>{s.menu}</span>}
     </Link>
   );
 
   /* ------------------------------------------------- اختيار النوع أولاً */
+  /* ----------------------------------------- رسالة توعوية بعد اختيار العمر */
+  if (phase === 'briefing') {
+    return (
+      <div
+        className="relative min-h-dvh overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: "url('/hq-h.jpg')" }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-slate-950/35" />
+
+        <img
+          src={`/saif-${briefingPose}.png`}
+          alt={lang === 'ar' ? 'سيف' : lang === 'ur' ? 'سیف' : 'Saif'}
+          className={`pointer-events-none absolute end-[6%] top-[8%] z-10 h-[38vh] max-h-[430px] w-auto object-contain drop-shadow-2xl transition-transform duration-300 sm:h-[48vh] ${
+            briefingSpeaking ? 'scale-[1.02]' : 'scale-100'
+          }`}
+        />
+
+        <div className="relative z-20 mx-auto flex min-h-dvh w-full max-w-6xl flex-col justify-end px-4 pb-6 sm:px-6 sm:pb-10">
+          <div className="mx-auto w-full max-w-4xl">
+            <div
+              className="relative rounded-[30px] bg-white/95 px-6 pb-6 pt-8 text-center sm:px-10 sm:pb-8"
+              style={{
+                border: '2px solid rgba(152,175,196,.78)',
+                boxShadow: '0 18px 42px rgba(19,45,70,.28)',
+                backdropFilter: 'blur(7px)',
+              }}
+            >
+              <div
+                className="absolute -top-4 end-8 rounded-full px-5 py-2 text-sm font-black text-white"
+                style={{ background: '#0d7d75', boxShadow: '0 4px 0 rgba(8,92,86,.22)' }}
+              >
+                {lang === 'ar' ? 'سيف 🛡️' : lang === 'ur' ? 'سیف 🛡️' : 'Saif 🛡️'}
+              </div>
+
+              <p
+                className="ink mx-auto max-w-3xl text-lg font-black leading-[2.15] sm:text-2xl"
+                dir={lang === 'en' ? 'ltr' : 'rtl'}
+                style={{ color: '#102b4c' }}
+              >
+                {briefingText}
+              </p>
+
+              {briefingVoiceLoading && (
+                <p className="ink-sm mt-3 text-xs font-bold text-[var(--fg-muted)]">
+                  {lang === 'ar' ? 'جارٍ تجهيز الصوت…' : lang === 'ur' ? 'آواز تیار ہو رہی ہے…' : 'Preparing voice…'}
+                </p>
+              )}
+
+              {briefingVoiceError && (
+                <p className="ink-sm mt-3 text-xs font-bold text-red-700">
+                  {lang === 'ar'
+                    ? 'تعذر تشغيل الصوت على هذا الجهاز.'
+                    : lang === 'ur'
+                      ? 'اس ڈیوائس پر آواز نہیں چل سکی۔'
+                      : 'The voice could not play on this device.'}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                stopBriefingVoice();
+                sfx.confirm();
+                setPhase('gender');
+              }}
+              className="mt-5 w-full rounded-2xl px-6 py-4 text-xl font-black text-white transition-transform active:translate-y-[3px]"
+              style={{
+                background: '#58cc02',
+                boxShadow: '0 5px 0 #46a302',
+              }}
+            >
+              {lang === 'ar' ? 'هيا لنبدأ' : lang === 'ur' ? 'آئیے شروع کریں' : 'Let’s begin'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'gender') {
     return (
       <Shell dim={0.35}>
@@ -313,8 +857,7 @@ export default function Play() {
                   key={g}
                   onClick={() => {
                     setGender(g);
-                    setPhase('intro');
-                    sfx.confirm();
+                    sfx.select();
                   }}
                   className="pxl flex flex-col items-center gap-3 px-3 pb-4 pt-6 transition-transform active:scale-[0.98]"
                   style={{ background: gender === g ? '#eefaf3' : '#ffffff' }}
@@ -331,94 +874,161 @@ export default function Play() {
             })}
           </div>
 
-          <div className="mt-8">{MenuLink}</div>
-        </div>
-      </Shell>
-    );
-  }
-
-  /* ------------------------------------------------- تمهيد الضابط سيف */
-  if (phase === 'brief') {
-    const words = s.briefText.split(' ');
-    return (
-      <Shell dim={0.12} bg="hq">
-        <div
-          className="anim-in flex min-h-[92dvh] flex-col"
-          onClick={() => {
-            if (!briefDone) setBriefWords(briefTotal);
-          }}
-        >
-          {/* مساحة حرة تكشف مبنى القيادة كاملاً */}
-          <div className="flex-1" />
-
-          {/* سيف على يمين الشاشة */}
-          <div className="pointer-events-none relative z-0 -mb-6 flex [direction:ltr] justify-end pe-1 landscape:-me-28 sm:pe-8">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              key={briefDone ? 3 : briefPose}
-              src={`/art/saif-${briefDone ? 3 : briefPose}.png`}
-              alt={s.briefName}
-              className="anim-in w-auto select-none portrait:h-[min(31dvh,300px)] landscape:h-[min(44dvh,410px)]"
-              draggable={false}
-              style={{ filter: 'drop-shadow(0 14px 18px rgba(30, 50, 80, 0.3))' }}
-            />
-          </div>
-
-          {/* صندوق الحوار أسفل الشاشة */}
-          <div className="relative z-10">
-            <div
-              className="rounded-3xl px-4 py-3 sm:px-5 sm:py-4"
-              style={{ background: '#ffffff', border: '2px solid var(--line)', boxShadow: 'var(--shadow)' }}
-            >
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black text-white"
-                style={{ background: '#0f766e' }}
-              >
-                🛡️ {s.briefName}
-              </span>
-              <p className="mt-2.5 min-h-24 text-[13.5px] font-black leading-7 sm:mt-3 sm:min-h-28 sm:text-base sm:leading-9">
-                {words.slice(0, briefWords).map((w, i) => (
-                  <span key={i} className={i === briefWords - 1 ? 'word-pop' : undefined}>
-                    {w}{' '}
-                  </span>
-                ))}
-                {!briefDone && <span className="blink text-[var(--gold-dark)]">▌</span>}
-              </p>
-              {!briefDone && (
-                <p className="mt-1 text-[10px] font-bold" style={{ color: 'var(--fg-dim)' }}>
-                  {lang === 'ar' ? 'اضغط لعرض الرسالة كاملة' : 'Tap to show the full message'}
-                </p>
-              )}
-            </div>
-            {/* ذيل يشير لأعلى نحو سيف */}
-            <span
-              className="absolute -top-[10px] right-16 h-5 w-5 rotate-45 sm:right-24"
-              style={{ background: '#fff', borderTop: '2px solid var(--line)', borderLeft: '2px solid var(--line)' }}
-            />
-          </div>
-
-          {/* المتابعة */}
           <div
-            className="sticky bottom-0 pt-4"
-            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+            className="mt-6 w-full max-w-md rounded-2xl px-4 py-3 text-center"
+            style={{
+              background: 'rgba(255,255,255,0.94)',
+              border: '2px solid #e0a21a',
+              boxShadow: 'var(--shadow-sm)',
+            }}
           >
-            {briefDone ? (
-              <button
-                data-testid="brief-cta"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  sfx.confirm();
-                  setPhase('age');
-                }}
-                className="anim-in w-full rounded-2xl px-6 py-4 text-lg font-black transition-transform active:translate-y-[3px]"
-                style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
-              >
-                {s.briefCta}
-              </button>
-            ) : (
-              <div className="h-[60px]" />
-            )}
+            <p className="ink text-base font-black leading-7 text-[var(--gold-dark)]">
+              {lang === 'ar'
+                ? 'أدخل بياناتك للحصول على الشهادة'
+                : lang === 'ur'
+                  ? 'سرٹیفکیٹ حاصل کرنے کے لیے اپنی معلومات درج کریں'
+                  : 'Enter your details to receive your certificate'}
+            </p>
+            <p className="ink-sm mt-1 text-xs font-bold leading-6 text-[var(--fg-muted)]">
+              {lang === 'ar'
+                ? 'الاسم إجباري، أما البريد الإلكتروني ورقم الهاتف فاختياريان. إذا رغبتم في استلام الشهادة عبر البريد الإلكتروني، يرجى إدخال بريدكم الإلكتروني.'
+                : lang === 'ur'
+                  ? 'نام لازمی ہے۔ ای میل اور فون نمبر اختیاری ہیں۔ اگر آپ سرٹیفکیٹ ای میل پر چاہتے ہیں تو اپنا ای میل درج کریں۔'
+                  : 'Name is required. Email and phone number are optional. If you want the certificate sent by email, enter your email address.'}
+            </p>
           </div>
+
+          <div className="mt-4 w-full max-w-md space-y-3 text-start">
+            <label className="block">
+              <span className="ink-sm mb-1 block text-xs font-black">
+                {lang === 'ar' ? 'الاسم الكامل *' : lang === 'ur' ? 'پورا نام *' : 'Full name *'}
+              </span>
+              <input
+                value={nameInput}
+                onChange={(event) => setNameInput(event.target.value)}
+                maxLength={120}
+                autoComplete="name"
+                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder={lang === 'ar' ? 'اكتب اسمك الكامل' : lang === 'ur' ? 'اپنا پورا نام لکھیں' : 'Enter your full name'}
+              />
+            </label>
+
+            <label className="block">
+              <span className="ink-sm mb-1 block text-xs font-black">
+                {lang === 'ar' ? 'البريد الإلكتروني (اختياري)' : lang === 'ur' ? 'ای میل (اختیاری)' : 'Email (optional)'}
+              </span>
+              <input
+                value={emailInput}
+                onChange={(event) => setEmailInput(event.target.value)}
+                maxLength={180}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                dir="ltr"
+                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder="name@example.com"
+              />
+            </label>
+
+            {emailInput.trim() && !validEmail(emailInput) && (
+              <p className="ink-sm text-xs font-black text-red-700">
+                {lang === 'ar'
+                  ? 'تأكد من كتابة البريد الإلكتروني بشكل صحيح.'
+                  : lang === 'ur'
+                    ? 'براہ کرم درست ای میل درج کریں۔'
+                    : 'Please enter a valid email address.'}
+              </p>
+            )}
+
+            <label className="block">
+              <span className="ink-sm mb-1 block text-xs font-black">
+                {lang === 'ar'
+                  ? 'رقم الهاتف (اختياري)'
+                  : lang === 'ur'
+                    ? 'فون نمبر (اختیاری)'
+                    : 'Phone number (optional)'}
+              </span>
+              <input
+                value={phoneInput}
+                onChange={(event) => setPhoneInput(event.target.value)}
+                maxLength={40}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                dir="ltr"
+                className="ink-sm w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder={lang === 'ar' ? '05xxxxxxxxx' : '+971 5X XXX XXXX'}
+              />
+            </label>
+
+            <PixelButton
+              size="lg"
+              className="w-full"
+              disabled={!gender || !nameInput.trim() || Boolean(emailInput.trim() && !validEmail(emailInput))}
+              onClick={async () => {
+                const savedName = nameInput.trim();
+                const savedEmail = emailInput.trim();
+                const savedPhone = phoneInput.trim();
+
+                if (!savedName || !age || !gender) return;
+                if (savedEmail && !validEmail(savedEmail)) return;
+
+                registeredNameRef.current = savedName;
+                registeredEmailRef.current = savedEmail;
+                registeredPhoneRef.current = savedPhone;
+
+                playerIdRef.current = devicePlayerId();
+                gameIdRef.current = crypto.randomUUID();
+                gameStartedAt.current = Date.now();
+
+                setName(savedName);
+                setEmail(savedEmail);
+                setPhone(savedPhone);
+
+                try {
+                  const response = await fetch('/api/game-results', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    cache: 'no-store',
+                    body: JSON.stringify({
+                      playerId: playerIdRef.current,
+                      gameId: gameIdRef.current,
+                      playerName: savedName,
+                      playerEmail: savedEmail,
+                      playerPhone: savedPhone,
+                      lang,
+                      ageGroup: age,
+                      gender,
+                      quizType: quiz.kids ? 'kids' : 'adult',
+                      score: 0,
+                      total: quiz.total,
+                      durationSeconds: 0,
+                      completed: false,
+                      certificateRequested: false,
+                      certificateSent: false,
+                      attempts: [],
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    // تعذُّر الحفظ (قاعدة بيانات غير مهيأة أو شبكة متقطعة) لا يمنع اللعب
+                    const detail = await response.text().catch(() => '');
+                    console.warn('Registration save skipped:', response.status, detail);
+                  }
+                } catch (error) {
+                  console.warn('Registration save skipped:', error);
+                }
+
+                sfx.confirm();
+                setPhase('intro');
+              }}
+            >
+              {lang === 'ar' ? 'متابعة' : lang === 'ur' ? 'جاری رکھیں' : 'Continue'}
+            </PixelButton>
+
+          </div>
+
+          <div className="mt-8">{MenuLink}</div>
         </div>
       </Shell>
     );
@@ -449,7 +1059,7 @@ export default function Play() {
                 className="rounded-3xl px-4 py-3"
                 style={{ background: '#fff', border: '2px solid var(--line)', boxShadow: 'var(--shadow-sm)' }}
               >
-                <p className="text-lg font-black">{lang === 'ar' ? 'كم عمرك؟' : s.onbAgeTitle}</p>
+                <p className="text-lg font-black">{s.onbAgeTitle}</p>
                 <p className="mt-0.5 text-[11px] font-bold" style={{ color: 'var(--muted, #7e94aa)' }}>
                   {s.onbAgeHint}
                 </p>
@@ -496,8 +1106,7 @@ export default function Play() {
                 if (agePick === null) return;
                 setAge(agePick);
                 sfx.confirm();
-                setVideoTap(false);
-                setPhase('video');
+                setPhase('briefing');
               }}
               className="w-full rounded-2xl px-6 py-4 text-lg font-black uppercase tracking-wide transition-transform active:translate-y-[3px] disabled:cursor-not-allowed"
               style={{
@@ -511,68 +1120,6 @@ export default function Play() {
           </div>
         </div>
       </Shell>
-    );
-  }
-
-  /* ------------- فيديو توعوي حسب الفئة العمرية — ملء الشاشة، بلا تخطٍّ */
-  if (phase === 'video') {
-    const endVideo = () => {
-      sfx.confirm();
-      setPhase('gender');
-    };
-    return (
-      <div
-        className="anim-in fixed inset-0 z-50 flex items-center justify-center"
-        style={{
-          background: '#04101f',
-          padding:
-            'max(2.6rem, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))',
-        }}
-      >
-        <video
-          ref={videoRef}
-          data-testid="intro-video"
-          src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
-          className="max-h-full max-w-full rounded-xl"
-          style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.16), 0 18px 50px rgba(0,0,0,0.55)' }}
-          playsInline
-          preload="auto"
-          onEnded={endVideo}
-          onError={endVideo}
-          onPlay={() => setVideoTap(false)}
-          onClick={(e) => {
-            const v = e.currentTarget;
-            if (v.paused) v.play().catch(() => setVideoTap(true));
-            else v.pause();
-          }}
-        />
-        <p
-          className="pointer-events-none absolute inset-x-0 px-6 text-center text-sm font-black sm:text-base"
-          style={{
-            top: 'max(0.9rem, env(safe-area-inset-top))',
-            color: 'rgba(255,255,255,0.92)',
-            textShadow: '0 1px 8px rgba(0,0,0,0.65)',
-          }}
-        >
-          🎬 {s.videoTitle}
-        </p>
-        {videoTap && (
-          <button
-            onClick={() => videoRef.current?.play().catch(() => {})}
-            aria-label={s.videoTap}
-            className="absolute inset-0 grid place-items-center"
-            style={{ background: 'rgba(4, 16, 31, 0.45)' }}
-          >
-            <span
-              className="grid h-20 w-20 place-items-center rounded-full pb-1 ps-1 text-3xl"
-              style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
-            >
-              ▶
-            </span>
-            <span className="absolute bottom-8 text-sm font-black text-white">{s.videoTap}</span>
-          </button>
-        )}
-      </div>
     );
   }
 
@@ -651,7 +1198,12 @@ export default function Play() {
     return (
       <Shell dim={0.45}>
         <div className="flex min-h-[80dvh] flex-col items-center justify-center text-center">
-          <Mascot gender={gender} kid={quiz.kids} mood="idle" size={170} />
+          <img
+            src={playerIdleAvatar}
+            alt=""
+            aria-hidden
+            className="h-48 w-40 object-contain drop-shadow-lg"
+          />
           <p key={count} className="title-px count-pop mt-8 text-8xl font-black sm:text-9xl">
             {count}
           </p>
@@ -676,42 +1228,332 @@ export default function Play() {
             </div>
           </div>
           <p className="ink-sm mt-3 text-xs font-bold leading-7 text-[var(--fg-muted)]">
-            {s.reviewHint}
+            {reviewMistakes.length > 0
+              ? lang === 'ar'
+                ? 'ناقش إجاباتك مع المساعد الذكي حتى تفهم سبب الخطأ والإجابة الصحيحة.'
+                : lang === 'ur'
+                  ? 'ہر غلطی اور درست جواب سمجھنے کے لیے ذہین معاون کے ساتھ اپنے جوابات کا جائزہ لیں۔'
+                  : 'Discuss your answers with the AI coach to understand each mistake and the correct answer.'
+              : lang === 'ar'
+                ? 'لم تسجل أي إجابة خاطئة في هذه الجولة.'
+                : lang === 'ur'
+                  ? 'اس مرحلے میں کوئی غلط جواب ریکارڈ نہیں ہوا۔'
+                  : 'You did not record any incorrect answers in this round.'}
           </p>
-          <ol className="mt-5 space-y-3">
-            {quiz.questions.map((item) => {
-              const c = lang === 'ar' ? item.ar : item.en;
-              const lv = quizLevelOf(quiz, item.n);
-              return (
-                <Panel key={item.n} className="p-4" tone="panel">
-                  <div className="flex items-center gap-2">
-                    <Chip color={lv.color}>
-                      <span className="pixel text-[9px]">
-                        {String(item.n).padStart(2, '0')}
-                      </span>
-                    </Chip>
-                    <span className="ink-sm text-[11px] font-black text-[var(--fg-muted)]">
-                      {s.question} {item.n} · {lang === 'ar' ? lv.ar : lv.en}
-                    </span>
-                  </div>
-                  <p className="ink-sm mt-3 text-sm font-black leading-8">{c.text}</p>
-                  <div
-                    className="ink-sm mt-3 rounded-2xl px-3 py-2 text-xs font-black leading-7"
-                    style={{ background: '#e6f7ee', color: '#135f3c', border: '1px solid #bfe8d2' }}
-                  >
-                    {letters[item.correct]}) {c.options[item.correct]}
-                  </div>
-                  <p className="ink-sm mt-2 text-xs font-bold leading-7 text-[var(--fg-muted)]">
-                    {c.explanation}
-                  </p>
-                </Panel>
-              );
-            })}
-          </ol>
+          <AiReviewChat mistakes={reviewMistakes} lang={lang} onComplete={finishReview} />
           <PixelButton size="lg" className="mt-6 w-full" onClick={begin}>
             {s.retry}
           </PixelButton>
         </div>
+      </Shell>
+    );
+  }
+
+  /* ---------------------------------------------------------- الفيديو التوعوي */
+  if (phase === 'video') {
+    return (
+      <Shell dim={0.55}>
+        <div className="anim-in">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="ink text-xl font-black">
+              {lang === 'ar' ? 'الفيديو التوعوي' : lang === 'ur' ? 'آگاہی ویڈیو' : 'Awareness video'}
+            </h1>
+            {MenuBtn}
+          </div>
+
+          <Panel tone="gold" className="mt-4 p-4 text-center">
+            <p className="ink-sm text-sm font-black leading-7">
+              {lang === 'ar'
+                ? `هذا الفيديو مخصص للفئة العمرية ${ageLabel}. شاهده كاملًا لفتح الشهادة.`
+                : lang === 'ur'
+                  ? `یہ ویڈیو ${ageLabel} عمر کے گروپ کے لیے ہے۔ سرٹیفکیٹ کھولنے کے لیے اسے مکمل دیکھیں۔`
+                  : `This video is for the ${ageLabel} age group. Watch it fully to unlock your certificate.`}
+            </p>
+          </Panel>
+
+          <Panel className="mt-4 overflow-hidden p-3" tone="panel">
+            <div className="relative overflow-hidden rounded-2xl" style={{ background: '#04101f' }}>
+              <video
+                ref={introVideoRef}
+                data-testid="intro-video"
+                src={`/videos/intro-${quiz.kids ? 'kids' : 'adult'}.mp4${quiz.kids ? '' : '?v=2'}`}
+                className="block aspect-video w-full"
+                playsInline
+                preload="auto"
+                onEnded={finishVideo}
+                onError={failVideo}
+                onPlay={() => setVideoTap(false)}
+                onTimeUpdate={(e) => {
+                  const v = e.currentTarget;
+                  if (!videoComplete && v.duration > 0) {
+                    setVideoProgress(Math.min(99, Math.round((v.currentTime / v.duration) * 100)));
+                  }
+                }}
+                onClick={(e) => {
+                  const v = e.currentTarget;
+                  if (v.paused) v.play().catch(() => setVideoTap(true));
+                  else v.pause();
+                }}
+              />
+              {videoTap && (
+                <button
+                  onClick={() => introVideoRef.current?.play().catch(() => {})}
+                  aria-label={lang === 'ar' ? 'اضغط للتشغيل' : lang === 'ur' ? 'چلانے کے لیے دبائیں' : 'Tap to play'}
+                  className="absolute inset-0 grid place-items-center"
+                  style={{ background: 'rgba(4, 16, 31, 0.45)' }}
+                >
+                  <span
+                    className="grid h-16 w-16 place-items-center rounded-full pb-1 ps-1 text-2xl"
+                    style={{ background: '#58cc02', color: '#fff', boxShadow: '0 4px 0 0 #46a302' }}
+                  >
+                    ▶
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200" aria-hidden>
+              <div
+                className="h-full rounded-full bg-[var(--green)] transition-[width] duration-300"
+                style={{ width: `${videoProgress}%` }}
+              />
+            </div>
+            <p className="ink-sm mt-2 text-center text-xs font-black text-[var(--fg-muted)]">
+              {videoComplete
+                ? lang === 'ar'
+                  ? '✅ اكتملت المشاهدة. انتقل الآن إلى الأسئلة الأخيرة قبل الشهادة.'
+                  : lang === 'ur'
+                    ? '✅ ویڈیو مکمل ہو گئی۔ سرٹیفکیٹ سے پہلے آخری سوالات مکمل کریں۔'
+                    : '✅ Video complete. Please answer the final questions before receiving your certificate.'
+                : lang === 'ar'
+                  ? `نسبة المشاهدة: ${videoProgress}%`
+                  : lang === 'ur'
+                    ? `دیکھنے کی پیش رفت: ${videoProgress}%`
+                    : `Watched: ${videoProgress}%`}
+            </p>
+
+            {videoError && (
+              <p className="ink-sm mt-3 text-center text-xs font-black text-red-700" role="alert">
+                {lang === 'ar'
+                  ? 'تعذر تشغيل الفيديو. تحقق من اتصال الإنترنت ثم أعد المحاولة.'
+                  : lang === 'ur'
+                    ? 'ویڈیو نہیں چل سکی۔ انٹرنیٹ چیک کر کے دوبارہ کوشش کریں۔'
+                    : 'The video could not play. Check the internet connection and try again.'}
+              </p>
+            )}
+          </Panel>
+
+          {!videoComplete && (
+            <PixelButton
+              size="lg"
+              color="green"
+              className="mt-4 w-full"
+              disabled
+            >
+              {lang === 'ar'
+                ? '🔒 أكمل الفيديو للمتابعة'
+                : lang === 'ur'
+                  ? '🔒 جاری رکھنے کے لیے ویڈیو مکمل کریں'
+                  : '🔒 Finish the video to continue'}
+            </PixelButton>
+          )}
+
+          <PixelButton size="md" className="mt-3 w-full" onClick={begin}>
+            {s.retry}
+          </PixelButton>
+        </div>
+
+      </Shell>
+    );
+  }
+
+  /* ---------------------------------------------------- أسئلة قبل الشهادة */
+  if (phase === 'survey') {
+    const surveyReady =
+      fraudExperience !== null &&
+      extortionExperience !== null &&
+      (fraudExperience === 'no' || fraudDetails.trim().length >= 3) &&
+      (extortionExperience === 'no' || extortionDetails.trim().length >= 3);
+
+    return (
+      <Shell dim={0.55}>
+        <div className="anim-in">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="ink text-xl font-black">
+              {lang === 'ar'
+                ? 'أسئلة أخيرة قبل الشهادة'
+                : lang === 'ur'
+                  ? 'سرٹیفکیٹ سے پہلے آخری سوالات'
+                  : 'Final questions before your certificate'}
+            </h1>
+            {MenuBtn}
+          </div>
+
+          <Panel tone="gold" className="mt-4 p-4 text-center">
+            <p className="ink-sm text-sm font-black leading-7">
+              {lang === 'ar'
+                ? 'أجب عن السؤالين التاليين. إذا اخترت «نعم»، اكتب الموقف باختصار بدون ذكر أي بيانات شخصية حساسة.'
+                : lang === 'ur'
+                  ? 'اگلے دو سوالات کے جواب دیں۔ اگر «ہاں» منتخب کریں تو واقعہ مختصراً لکھیں اور حساس ذاتی معلومات شامل نہ کریں۔'
+                  : 'Answer the two questions below. If you choose “Yes”, briefly describe what happened without including sensitive personal information.'}
+            </p>
+          </Panel>
+
+          <Panel className="mt-4 p-4" tone="panel">
+            <p className="ink text-base font-black leading-7">
+              {lang === 'ar'
+                ? '1. هل سبق وتعرضت للاحتيال الإلكتروني؟'
+                : lang === 'ur'
+                  ? '1. کیا آپ کبھی آن لائن فراڈ کا شکار ہوئے ہیں؟'
+                  : '1. Have you ever experienced online fraud?'}
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <PixelButton
+                size="md"
+                color={fraudExperience === 'yes' ? 'blue' : 'slate'}
+                onClick={() => {
+                  setFraudExperience('yes');
+                  sfx.select();
+                }}
+              >
+                {lang === 'ar' ? 'نعم' : lang === 'ur' ? 'ہاں' : 'Yes'}
+              </PixelButton>
+              <PixelButton
+                size="md"
+                color={fraudExperience === 'no' ? 'green' : 'slate'}
+                onClick={() => {
+                  setFraudExperience('no');
+                  setFraudDetails('');
+                  sfx.select();
+                }}
+              >
+                {lang === 'ar' ? 'لا' : lang === 'ur' ? 'نہیں' : 'No'}
+              </PixelButton>
+            </div>
+
+            {fraudExperience === 'yes' && (
+              <textarea
+                value={fraudDetails}
+                onChange={(event) => setFraudDetails(event.target.value)}
+                maxLength={800}
+                rows={4}
+                className="ink-sm mt-3 w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder={
+                  lang === 'ar'
+                    ? 'اكتب باختصار نوع الاحتيال أو الموقف الذي تعرضت له...'
+                    : lang === 'ur'
+                      ? 'مختصراً لکھیں کہ کس قسم کا فراڈ یا واقعہ پیش آیا...'
+                      : 'Briefly describe the fraud or situation you experienced...'
+                }
+              />
+            )}
+          </Panel>
+
+          <Panel className="mt-4 p-4" tone="panel">
+            <p className="ink text-base font-black leading-7">
+              {lang === 'ar'
+                ? '2. هل سبق وتعرضت للابتزاز الإلكتروني أو محاولة ابتزاز؟'
+                : lang === 'ur'
+                  ? '2. کیا آپ کبھی آن لائن بلیک میلنگ یا بلیک میلنگ کی کوشش کا سامنا کر چکے ہیں؟'
+                  : '2. Have you ever experienced online blackmail or an attempted blackmail?'}
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <PixelButton
+                size="md"
+                color={extortionExperience === 'yes' ? 'blue' : 'slate'}
+                onClick={() => {
+                  setExtortionExperience('yes');
+                  sfx.select();
+                }}
+              >
+                {lang === 'ar' ? 'نعم' : lang === 'ur' ? 'ہاں' : 'Yes'}
+              </PixelButton>
+              <PixelButton
+                size="md"
+                color={extortionExperience === 'no' ? 'green' : 'slate'}
+                onClick={() => {
+                  setExtortionExperience('no');
+                  setExtortionDetails('');
+                  sfx.select();
+                }}
+              >
+                {lang === 'ar' ? 'لا' : lang === 'ur' ? 'نہیں' : 'No'}
+              </PixelButton>
+            </div>
+
+            {extortionExperience === 'yes' && (
+              <textarea
+                value={extortionDetails}
+                onChange={(event) => setExtortionDetails(event.target.value)}
+                maxLength={800}
+                rows={4}
+                className="ink-sm mt-3 w-full rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[var(--blue)]"
+                placeholder={
+                  lang === 'ar'
+                    ? 'اكتب باختصار الموقف بدون ذكر أسماء أو أرقام أو معلومات شخصية حساسة...'
+                    : lang === 'ur'
+                      ? 'نام، نمبر یا حساس ذاتی معلومات کے بغیر واقعہ مختصراً لکھیں...'
+                      : 'Briefly describe what happened without names, numbers, or sensitive personal information...'
+                }
+              />
+            )}
+          </Panel>
+
+          <PixelButton
+            size="lg"
+            color="green"
+            className="mt-5 w-full"
+            disabled={!surveyReady}
+            onClick={async () => {
+              if (!surveyReady) return;
+
+              try {
+                await saveGameState({
+                  completed: true,
+                  certificateRequested: true,
+                  certificateSent: false,
+                  fraudExperience,
+                  fraudDetails,
+                  extortionExperience,
+                  extortionDetails,
+                });
+              } catch {
+                // لا نمنع اللاعب من الوصول للشهادة إذا تعذر حفظ الإحصائيات مؤقتًا.
+              }
+
+              setCert(true);
+              sfx.confirm();
+            }}
+          >
+            {lang === 'ar'
+              ? 'متابعة إلى الشهادة'
+              : lang === 'ur'
+                ? 'سرٹیفکیٹ کی طرف جاری رکھیں'
+                : 'Continue to certificate'}
+          </PixelButton>
+        </div>
+
+        {cert && (
+          <Certificate
+            score={quiz.total}
+            total={quiz.total}
+            title={quizCertificateTitle(quiz, quiz.total)[lang]}
+            onClose={() => setCert(false)}
+            onEmailSent={() => {
+              void saveGameState({
+                completed: true,
+                certificateRequested: true,
+                certificateSent: true,
+                fraudExperience,
+                fraudDetails,
+                extortionExperience,
+                extortionDetails,
+              });
+            }}
+          />
+        )}
       </Shell>
     );
   }
@@ -721,13 +1563,13 @@ export default function Play() {
     return (
       <Shell dim={0.45}>
         <div className="anim-in flex min-h-[80dvh] flex-col items-center justify-center text-center">
-          <Mascot gender={gender} kid={quiz.kids} mood="happy" size={150} />
+          <img src={playerIdleAvatar} alt="" aria-hidden className="h-44 w-36 object-contain drop-shadow-lg" />
           <p className="pixel ink mt-6 text-lg text-[var(--gold-dark)] sm:text-2xl" dir="ltr">
             STAGE CLEAR
           </p>
           <Panel tone="dark" className="mt-6 w-full max-w-md p-6">
             <p className="ink text-xl font-black leading-relaxed">
-              {lang === 'ar' ? MS[q.n].ar : MS[q.n].en}
+              {MS[q.n][lang]}
             </p>
             <p className="tnum ink-sm mt-3 text-sm font-bold" style={{ color: '#c6d8ee' }}>
               {q.n} / {quiz.total}
@@ -799,7 +1641,7 @@ export default function Play() {
           />
           <Panel tone="red" className="shake p-6 text-center">
             <div className="flex justify-center">
-              <Mascot gender={gender} kid={quiz.kids} mood="ko" size={140} />
+              <img src={playerIdleAvatar} alt="" aria-hidden className="h-40 w-32 object-contain drop-shadow-lg" />
             </div>
             <p className="pixel ink mt-3 text-xl text-[var(--red-dark)] sm:text-3xl" dir="ltr">
               GAME OVER
@@ -814,7 +1656,7 @@ export default function Play() {
             <Stat label={s.yourScore} value={`${score} / ${quiz.total}`} />
             <Stat
               label={s.reached}
-              value={lang === 'ar' ? quizLevelOf(quiz, Math.max(1, score || 1)).ar : quizLevelOf(quiz, Math.max(1, score || 1)).en}
+              value={quizLevelOf(quiz, Math.max(1, score || 1))[lang]}
             />
           </div>
 
@@ -829,7 +1671,7 @@ export default function Play() {
           {reward && (
             <Panel tone="gold" className="mt-3 px-4 py-3 text-center">
               <span className="ink-sm text-sm font-black">
-                🏅 {s.earned}: {lang === 'ar' ? reward.ar : reward.en}
+                🏅 {s.earned}: {reward[lang]}
               </span>
             </Panel>
           )}
@@ -885,15 +1727,9 @@ export default function Play() {
             <PixelButton size="md" color="slate" className="w-full" onClick={() => setPhase('review')}>
               {s.reviewMode}
             </PixelButton>
-            {score >= quiz.certMin && (
-              <PixelButton size="md" color="green" className="w-full" onClick={() => setCert(true)}>
-                {s.getCertificate}
-              </PixelButton>
-            )}
             <div className="flex justify-center py-2">{MenuLink}</div>
           </div>
         </div>
-        {cert && <Certificate score={score} total={quiz.total} title={quizCertificateTitle(quiz, score)[lang]} onClose={() => setCert(false)} />}
       </Shell>
     );
   }
@@ -932,19 +1768,25 @@ export default function Play() {
           </Panel>
 
           <div className="mt-5 space-y-2">
-            <PixelButton size="lg" className="w-full" onClick={() => setCert(true)}>
-              {s.getCertificate}
+            <PixelButton size="lg" className="w-full" onClick={() => setPhase('review')}>
+              {reviewMistakes.length > 0
+                ? lang === 'ar'
+                  ? 'مراجعة الأخطاء ثم مشاهدة الفيديو'
+                  : lang === 'ur'
+                    ? 'غلطیوں کا جائزہ لیں، پھر ویڈیو دیکھیں'
+                    : 'Review mistakes, then watch the video'
+                : lang === 'ar'
+                  ? 'متابعة لمشاهدة الفيديو'
+                  : lang === 'ur'
+                    ? 'ویڈیو دیکھنے کے لیے جاری رکھیں'
+                    : 'Continue to the video'}
             </PixelButton>
             <PixelButton size="md" color="blue" className="w-full" onClick={share} sound="select">
               {copied ? s.copied : `📣 ${s.shareResult}`}
             </PixelButton>
-            <PixelButton size="md" color="slate" className="w-full" onClick={() => setPhase('review')}>
-              {s.reviewAll}
-            </PixelButton>
             <div className="flex justify-center py-2">{MenuLink}</div>
           </div>
         </div>
-        {cert && <Certificate score={quiz.total} total={quiz.total} title={quizCertificateTitle(quiz, quiz.total)[lang]} onClose={() => setCert(false)} />}
       </Shell>
     );
   }
@@ -977,7 +1819,7 @@ export default function Play() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Hearts alive label={s.oneLife} />
-            <Chip color={level.color}>{lang === 'ar' ? level.ar : level.en}</Chip>
+            <Chip color={level.color}>{level[lang]}</Chip>
           </div>
           <div className="flex items-center gap-2">
             <span className="pixel ink-sm text-[10px] text-[var(--fg-muted)]">
@@ -1010,7 +1852,29 @@ export default function Play() {
 
         {/* الشخصية + السلسلة */}
         <div className="mt-4 flex items-center justify-center gap-3">
-          <Mascot gender={gender} kid={quiz.kids} mood={mood} size={96} sweat={level.id >= 3} />
+          <img
+            src={playerIdleAvatar}
+            alt={
+              gender === 'female'
+                ? lang === 'ar'
+                  ? 'شخصية اللاعبة'
+                  : lang === 'ur'
+                    ? 'خاتون کھلاڑی'
+                    : 'Female player character'
+                : age === '12-17'
+                  ? lang === 'ar'
+                    ? 'شخصية اللاعب الطفل'
+                    : lang === 'ur'
+                      ? 'بچے کی شخصیت'
+                      : 'Child player character'
+                  : lang === 'ar'
+                    ? 'شخصية اللاعب'
+                    : lang === 'ur'
+                      ? 'کھلاڑی کی شخصیت'
+                      : 'Player character'
+            }
+            className="h-28 w-24 object-contain drop-shadow-md"
+          />
           {streak >= 3 && (
             <span
               className="rounded-full px-3.5 py-1.5 text-xs font-black text-white"
@@ -1035,10 +1899,10 @@ export default function Play() {
               ⚡ FINAL STAGE ⚡
             </span>
             <span className="mt-1 block text-base font-black text-white">
-              {lang === 'ar' ? 'مستوى الخبير الرقمي' : 'Digital Expert Level'}
+              {lang === 'ar' ? 'مستوى الخبير الرقمي' : lang === 'ur' ? 'ڈیجیٹل ایکسپرٹ درجہ' : 'Digital Expert Level'}
             </span>
             <span className="mt-1 block text-xs font-bold" style={{ color: '#b9e8e2' }}>
-              {lang === 'ar' ? 'سؤالان يفصلانك عن اللقب!' : 'Two questions between you and the title!'}
+              {lang === 'ar' ? 'سؤالان يفصلانك عن اللقب!' : lang === 'ur' ? 'لقب تک صرف دو سوال باقی ہیں!' : 'Two questions between you and the title!'}
             </span>
           </div>
         )}
@@ -1057,6 +1921,47 @@ export default function Play() {
             {copy.text}
           </h1>
         </Panel>
+
+        {wrongAttempt && !revealed && (
+          <Panel tone="red" className="anim-in mt-3 p-4">
+            <p className="ink-sm text-sm font-black leading-7">
+              {lang === 'ar'
+                ? 'الإجابة غير صحيحة.'
+                : lang === 'ur'
+                  ? 'یہ جواب درست نہیں ہے۔'
+                  : 'That answer is not correct.'}
+            </p>
+
+            <p className="ink-sm mt-2 text-xs font-bold leading-7">
+              {lang === 'ar'
+                ? `ليش؟ ${copy.explanation}`
+                : lang === 'ur'
+                  ? `کیوں؟ ${copy.explanation}`
+                  : `Why? ${copy.explanation}`}
+            </p>
+
+            <div
+              className="mt-3 rounded-2xl px-3 py-2.5"
+              style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(143,35,32,0.18)' }}
+            >
+              <p className="ink-sm text-xs font-black leading-7">
+                {lang === 'ar'
+                  ? '💡 تذكّر: توقف، تحقق، ثم تصرّف بأمان.'
+                  : lang === 'ur'
+                    ? '💡 یاد رکھیں: رکیں، تصدیق کریں، پھر محفوظ طریقے سے عمل کریں۔'
+                    : '💡 Remember: Stop, verify, then act safely.'}
+              </p>
+            </div>
+
+            <p className="ink-sm mt-3 text-sm font-black leading-7">
+              {lang === 'ar'
+                ? 'حاول مرة أخرى واختر الإجابة الصحيحة للمتابعة.'
+                : lang === 'ur'
+                  ? 'دوبارہ کوشش کریں اور آگے بڑھنے کے لیے درست جواب منتخب کریں۔'
+                  : 'Try again and choose the correct answer to continue.'}
+            </p>
+          </Panel>
+        )}
 
         <div className="mt-3 space-y-2">
           {ord.map((oi, di) => {
@@ -1125,9 +2030,6 @@ export default function Play() {
             >
               {selected === null ? s.pick : s.confirm}
             </PixelButton>
-            <p className="ink-sm mt-3 text-center text-[11px] font-bold leading-6 text-[var(--fg-muted)]">
-              {s.oneLife}
-            </p>
           </div>
         )}
       </div>
@@ -1156,7 +2058,7 @@ function OnbProgress({ step, className = '' }: { step: 1 | 2; className?: string
 }
 
 function dirArrow(lang: string) {
-  return lang === 'ar' ? '→' : '←';
+  return lang === 'en' ? '←' : '→';
 }
 
 function TimeBar({ left, total }: { left: number; total: number }) {

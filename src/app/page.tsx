@@ -58,10 +58,10 @@ export default function Home() {
             <span className="pixel text-[9px]" dir="ltr">
               PRESENTER MODE
             </span>
-            {lang === 'ar' && <span>{s.presenter}</span>}
+            {lang !== 'en' && <span>{s.presenter}</span>}
           </Link>
           <div className="mt-3 flex items-center gap-2" role="group" aria-label="Language">
-            {(['ar', 'en'] as Lang[]).map((l) => (
+            {(['ar', 'en', 'ur'] as Lang[]).map((l) => (
               <button
                 key={l}
                 onClick={() => {
@@ -75,7 +75,7 @@ export default function Home() {
                   color: lang === l ? '#fff' : 'var(--fg-muted)',
                 }}
               >
-                {l === 'ar' ? 'العربية' : 'English'}
+                {l === 'ar' ? 'العربية' : l === 'ur' ? 'اردو' : 'English'}
               </button>
             ))}
           </div>
@@ -96,7 +96,7 @@ export default function Home() {
                   className="h-3 w-3 shrink-0 rounded-full"
                   style={{ background: l.color }}
                 />
-                <span className="ink-sm text-sm font-black">{lang === 'ar' ? l.ar : l.en}</span>
+                <span className="ink-sm text-sm font-black">{l[lang]}</span>
                 <span className="tnum ink-sm ms-auto text-xs text-[var(--fg-muted)]">
                   {l.from === l.to ? l.from : `${l.from}–${l.to}`}
                 </span>
@@ -116,7 +116,7 @@ export default function Home() {
                 </Chip>
                 <span className="ink-sm text-xs text-[var(--fg-muted)]">{s.correctAnswers}</span>
                 <span className="ink-sm ms-auto text-sm font-black">
-                  {lang === 'ar' ? r.ar : r.en}
+                  {r[lang]}
                 </span>
               </div>
             ))}

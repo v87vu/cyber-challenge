@@ -10,9 +10,9 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: 'تحدي الوعي الرقمي — Digital Awareness Challenge',
+  title: 'تحدي الوعي الرقمي — Digital Awareness Challenge — ڈیجیٹل آگاہی چیلنج',
   description:
-    'لعبة توعوية من 20 سؤالاً لرفع وعي الطلبة بمخاطر الجرائم الإلكترونية. توقف .. تحقق .. ثم تصرف. | A 20-question game on cybercrime awareness.',
+    'لعبة توعوية متعددة اللغات لرفع الوعي بمخاطر الجرائم الإلكترونية. | A multilingual cybercrime-awareness game. | سائبر جرائم سے آگاہی کا کثیر لسانی کھیل۔',
 };
 
 export const viewport: Viewport = {

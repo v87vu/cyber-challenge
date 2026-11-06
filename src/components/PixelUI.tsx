@@ -56,6 +56,7 @@ export function PixelButton({
   size = 'md',
   className = '',
   sound = 'confirm',
+  type = 'button',
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -64,12 +65,13 @@ export function PixelButton({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   sound?: 'confirm' | 'select' | 'none';
+  type?: 'button' | 'submit';
 }) {
   const pad = { sm: 'px-4 py-2.5 text-sm', md: 'px-5 py-3 text-[15px]', lg: 'px-6 py-4 text-lg' }[size];
   const v = BTN[color];
   return (
     <button
-      type="button"
+      type={type}
       onClick={() => {
         if (sound !== 'none') sfx[sound]();
         onClick?.();
