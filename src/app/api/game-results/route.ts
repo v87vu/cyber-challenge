@@ -86,10 +86,6 @@ export async function POST(request: Request) {
       safeText(existing?.player_phone, 40) ||
       safeText(playerIdentity?.player_phone, 40);
 
-    if (!resolvedName) {
-      return NextResponse.json({ error: 'Player name is required.' }, { status: 400 });
-    }
-
     const incomingFraud =
       body.fraudExperience === 'yes' ? true : body.fraudExperience === 'no' ? false : null;
     const incomingExtortion =
@@ -144,9 +140,6 @@ export async function POST(request: Request) {
     });
 
     const savedSession = savedRows[0];
-    if (!savedSession || !safeText(savedSession.player_name, 120)) {
-      throw new Error('Supabase returned a game session without player identity.');
-    }
 
     const perQuestion = new Map<number, number>();
     const answerRows = attempts.map((attempt: Record<string, unknown>) => {
@@ -181,10 +174,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       saved: true,
       player: {
-        id: savedSession.player_id ?? playerId,
-        name: savedSession.player_name,
-        email: savedSession.player_email ?? null,
-        phone: savedSession.player_phone ?? null,
+        id: savedSession?.player_id ?? playerId,
+        name: savedSession?.player_name ?? resolvedName,
+        email: savedSession?.player_email ?? null,
+        phone: savedSession?.player_phone ?? null,
       },
     });
   } catch (error) {

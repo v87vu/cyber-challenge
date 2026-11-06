@@ -277,13 +277,14 @@ export default function Play() {
       extortionExperience?: 'yes' | 'no' | null;
       extortionDetails?: string;
     } = {}) => {
-      const savedName = registeredNameRef.current.trim() || playerName.trim();
-      const savedEmail = registeredEmailRef.current.trim() || playerEmail.trim();
+      if (typeof navigator !== 'undefined' && navigator.webdriver) return;
+
+      const savedName = registeredNameRef.current.trim();
+      const savedEmail = registeredEmailRef.current.trim();
 
       if (
         !age ||
         !gender ||
-        !savedName ||
         (savedEmail && !validEmail(savedEmail)) ||
         !playerIdRef.current ||
         !gameIdRef.current
@@ -340,8 +341,16 @@ export default function Play() {
       console.error('Game state save failed after retries:', lastError);
       throw lastError instanceof Error ? lastError : new Error('Game state save failed');
     },
-    [age, gender, playerName, playerEmail, lang, quiz.kids, quiz.total, idx, attempts],
+    [age, gender, lang, quiz.kids, quiz.total, idx, attempts],
   );
+
+  useEffect(() => {
+    if (phase === 'question' && idx === 0 && attempts.length === 0) {
+      void saveGameState().catch(() => {});
+    } else if (phase === 'milestone' || phase === 'won') {
+      void saveGameState({ completed: phase === 'won' }).catch(() => {});
+    }
+  }, [phase, idx, attempts.length, saveGameState]);
 
   const finishReview = useCallback(() => {
     setReviewComplete(true);
@@ -384,7 +393,9 @@ export default function Play() {
 
   const begin = useCallback(() => {
     if (!playerIdRef.current) playerIdRef.current = devicePlayerId();
-    if (!gameIdRef.current) gameIdRef.current = crypto.randomUUID();
+    if (!gameIdRef.current) gameIdRef.current = 'v2-' + crypto.randomUUID();
+    registeredNameRef.current = '';
+    registeredEmailRef.current = '';
     gameStartedAt.current = Date.now();
 
     setOrder(quiz.questions.map(() => shuffled()));
@@ -1115,6 +1126,13 @@ export default function Play() {
             onClick={() => {
               if (!surveyReady) return;
               sfx.confirm();
+              void saveGameState({
+                completed: true,
+                fraudExperience,
+                fraudDetails,
+                extortionExperience,
+                extortionDetails,
+              }).catch(() => {});
               setPhase('certificate');
             }}
           >
