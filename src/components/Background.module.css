@@ -1,0 +1,5 @@
+.arriving { animation: crossfade 400ms ease-out both; }
+@keyframes crossfade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .arriving { animation-duration: 180ms; }
+}

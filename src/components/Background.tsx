@@ -1,13 +1,21 @@
 'use client';
 
+import { useState } from 'react';
+import { locationImage, type Location } from '../lib/locations';
+import styles from './Background.module.css';
+
 /* خلفية حصن أم القيوين:
    - عرضي/سطح المكتب: تعبئة كاملة (cover).
    - رأسي (الهاتف): الصورة بكامل عرضها مثبتة أسفل الشاشة حتى يظهر الحصن كاملاً،
      وسماء متدرجة تكمل الأعلى بلون حافة الصورة نفسها، مع تلاشٍ ناعم عند الالتقاء. */
 
-export default function Background({ dim = 0 }: { dim?: number }) {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+function LocationArtwork({ location }: { location: Location }) {
+  if (location !== 'fort') {
+    // Local pre-rendered artwork; preserve the soft day palette.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={locationImage(location)} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: 'center 60%' }} />;
+  }
+  return <>
       {/* الوضع العرضي */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -37,6 +45,18 @@ export default function Background({ dim = 0 }: { dim?: number }) {
         }}
       />
 
+    </>;
+}
+
+export default function Background({ dim = 0, location = 'fort', nextLocation }: { dim?: number; location?: Location; nextLocation?: Location }) {
+  const [transition, setTransition] = useState({ current: location, previous: location });
+  // Remember the outgoing artwork while the new layer fades over it.
+  if (transition.current !== location) setTransition({ current: location, previous: transition.current });
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" data-location={location}>
+      {nextLocation && nextLocation !== location && <link rel="preload" as="image" href={locationImage(nextLocation)} />}
+      <div className="absolute inset-0"><LocationArtwork location={transition.previous} /></div>
+      <div key={location} className={`absolute inset-0 ${styles.arriving}`}><LocationArtwork location={location} /></div>
       {/* تدرّج قراءة خفيف */}
       <div
         className="absolute inset-0"

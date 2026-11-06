@@ -13,6 +13,11 @@ import AiReviewChat, { type ReviewMistake } from '@/components/AiReviewChat';
 import { Chip, Hearts, Panel, PixelButton } from '@/components/PixelUI';
 import { mutedServerSnapshot, mutedSnapshot, sfx, subscribeMuted, toggleMuted } from '@/lib/sfx';
 import { AGE_GROUPS, setAge, setEmail, setGender, setName, setPhone, type AgeGroup, type Gender } from '@/lib/prefs';
+import ScamScene from '@/components/ScamScene';
+import ShieldMap from '@/components/ShieldMap';
+import { levelLocation } from '@/lib/locations';
+import { getScene } from '@/lib/scenes';
+import { bestStarsSnapshot, bestStarsServerSnapshot, subscribeBestStars, recordStars, summarizeStars, type FoundFlags } from '@/lib/stars';
 import { bestServerSnapshot, bestSnapshot, recordScore, subscribeBest } from '@/lib/best';
 
 type Phase = 'gender' | 'age' | 'briefing' | 'intro' | 'countdown' | 'question' | 'correct' | 'milestone' | 'golden' | 'lost' | 'won' | 'review' | 'video' | 'survey';
@@ -86,6 +91,7 @@ export default function Play() {
   const [phoneInput, setPhoneInput] = useState(playerPhone);
   const [attempts, setAttempts] = useState<AnswerAttempt[]>([]);
   const [wrongAttempt, setWrongAttempt] = useState(false);
+  const [foundFlags, setFoundFlags] = useState<FoundFlags>({});
   const [reviewComplete, setReviewComplete] = useState(false);
   const [videoComplete, setVideoComplete] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -96,26 +102,21 @@ export default function Play() {
   const [fraudDetails, setFraudDetails] = useState('');
   const [extortionExperience, setExtortionExperience] = useState<'yes' | 'no' | null>(null);
   const [extortionDetails, setExtortionDetails] = useState('');
-  const [briefingVoiceLoading, setBriefingVoiceLoading] = useState(false);
-  const [briefingVoiceError, setBriefingVoiceError] = useState(false);
-  const [briefingSpeaking, setBriefingSpeaking] = useState(false);
-  const [briefingPose, setBriefingPose] = useState(1);
-  const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
-  const briefingAudioUrlRef = useRef<string | null>(null);
-  const briefingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
   const mute = useSyncExternalStore(subscribeMuted, mutedSnapshot, mutedServerSnapshot);
   const revealRef = useRef<HTMLDivElement>(null);
-  const attemptStartedAt = useRef(Date.now());
+  const attemptStartedAt = useRef(0);
   const playerIdRef = useRef('');
   const gameIdRef = useRef('');
   const registeredNameRef = useRef('');
   const registeredEmailRef = useRef('');
   const registeredPhoneRef = useRef('');
-  const gameStartedAt = useRef(Date.now());
+  const gameStartedAt = useRef(0);
   const analyticsSent = useRef(false);
   const bestPair = useSyncExternalStore(subscribeBest, bestSnapshot, bestServerSnapshot);
   const best = quiz.kids ? bestPair.kids : bestPair.adult;
+  const mode = quiz.kids ? 'kids' : 'adult';
+  const starBest = useSyncExternalStore(subscribeBestStars, bestStarsSnapshot, bestStarsServerSnapshot);
+  const rewards = summarizeStars(mode, attempts, foundFlags);
 
   const briefingText =
     lang === 'ar'
@@ -124,156 +125,18 @@ export default function Play() {
         ? 'معاشرے کی حفاظت ایک مشترکہ ذمہ داری ہے جو آگاہی سے شروع ہوتی ہے اور ہوشیاری اور ذمہ داری سے مضبوط ہوتی ہے۔ مل کر ہم اپنے ڈیجیٹل معاشرے کو محفوظ رکھتے ہیں اور سب کے لیے زیادہ محفوظ ماحول بناتے ہیں۔'
         : 'Protecting our community is a shared responsibility that begins with awareness and is strengthened by vigilance and responsibility. Together, we protect our digital community and create a safer environment for everyone.';
 
-  const stopBriefingVoice = useCallback(() => {
-    if (briefingAudioRef.current) {
-      briefingAudioRef.current.pause();
-      briefingAudioRef.current.currentTime = 0;
-      setBriefingSpeaking(false);
-      briefingAudioRef.current = null;
-    }
-    if (briefingAudioUrlRef.current) {
-      URL.revokeObjectURL(briefingAudioUrlRef.current);
-      briefingAudioUrlRef.current = null;
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    briefingUtteranceRef.current = null;
-  }, []);
-
-  const playBriefingVoice = useCallback(async () => {
-    stopBriefingVoice();
-    setBriefingVoiceError(false);
-    setBriefingVoiceLoading(true);
-
-    const playDeviceFallback = () => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        setBriefingVoiceError(true);
-        setBriefingVoiceLoading(false);
-        return;
-      }
-
-      const synth = window.speechSynthesis;
-      const utterance = new SpeechSynthesisUtterance(briefingText);
-      briefingUtteranceRef.current = utterance;
-
-      utterance.lang = lang === 'ar' ? 'ar-AE' : lang === 'ur' ? 'ur-PK' : 'en-US';
-      utterance.rate = lang === 'ar' ? 0.9 : 0.94;
-      utterance.pitch = 0.96;
-      utterance.volume = 1;
-
-      const voices = synth.getVoices();
-      const prefix = lang === 'ar' ? 'ar' : lang === 'ur' ? 'ur' : 'en';
-      const matching = voices.find((voice) => voice.lang?.toLowerCase().startsWith(prefix));
-      if (matching) utterance.voice = matching;
-
-      utterance.onstart = () => {
-        setBriefingVoiceLoading(false);
-        setBriefingSpeaking(true);
-      };
-      utterance.onend = () => {
-        setBriefingSpeaking(false);
-        briefingUtteranceRef.current = null;
-      };
-      utterance.onerror = () => {
-        setBriefingVoiceLoading(false);
-        setBriefingSpeaking(false);
-        setBriefingVoiceError(true);
-        briefingUtteranceRef.current = null;
-      };
-
-      try {
-        synth.cancel();
-        synth.speak(utterance);
-        window.setTimeout(() => {
-          if (!synth.speaking) setBriefingVoiceLoading(false);
-        }, 1200);
-      } catch {
-        setBriefingVoiceLoading(false);
-        setBriefingVoiceError(true);
-      }
-    };
-
-    let lastStatus = 0;
-
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const response = await fetch('/api/text-to-speech', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
-          body: JSON.stringify({
-            text: briefingText,
-            lang,
-            voiceProfile: 'adult-male',
-          }),
-        });
-
-        lastStatus = response.status;
-        if (!response.ok) throw new Error(`TTS ${response.status}`);
-
-        const blob = await response.blob();
-        if (!blob.size || !blob.type.startsWith('audio/')) {
-          throw new Error('Invalid audio');
-        }
-
-        const url = URL.createObjectURL(blob);
-        briefingAudioUrlRef.current = url;
-
-        const audio = new Audio(url);
-        briefingAudioRef.current = audio;
-        audio.preload = 'auto';
-
-        audio.onplaying = () => {
-          setBriefingVoiceLoading(false);
-          setBriefingSpeaking(true);
-        };
-        audio.onended = () => {
-          setBriefingSpeaking(false);
-          briefingAudioRef.current = null;
-        };
-        audio.onerror = () => {
-          setBriefingSpeaking(false);
-          playDeviceFallback();
-        };
-
-        await audio.play();
-        return;
-      } catch (error) {
-        if (attempt === 0 && lastStatus === 429) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1400));
-          continue;
-        }
-      }
-    }
-
-    // Gemini failed: use the device only as a backup so the page still speaks.
-    playDeviceFallback();
-  }, [briefingText, lang, stopBriefingVoice]);
-
-  // سيف لا يتكلم بصوت — قرار ثابت من صاحب المشروع؛ الرسالة تظهر نصاً فقط
-  useEffect(() => {
-    stopBriefingVoice();
-  }, [phase, stopBriefingVoice]);
-
-  useEffect(() => {
-    if (phase !== 'briefing' || !briefingSpeaking) {
-      setBriefingPose(1);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setBriefingPose((current) => (current >= 5 ? 1 : current + 1));
-    }, 900);
-
-    return () => window.clearInterval(timer);
-  }, [phase, briefingSpeaking]);
-
   const q = quiz.questions[idx];
   const copy = questionCopy(q, lang);
+  const scene = getScene(mode, q.n);
+  const questionAttempts = attempts.filter((attempt) => attempt.questionNumber === q.n);
+  const findFlag = (id: string) => {
+    if (phase !== 'correct' || !scene.flags.some((flag) => flag.id === id)) return;
+    setFoundFlags((current) => current[q.n]?.includes(id) ? current : { ...current, [q.n]: [...(current[q.n] ?? []), id] });
+  };
   const ord = order[idx] ?? [0, 1, 2, 3];
   const correctDisplay = ord.indexOf(q.correct);
   const level = quizLevelOf(quiz, q.n);
+  const nextLevel = quiz.levels[quiz.levels.findIndex((item) => item.id === level.id) + 1];
   const letters = LETTERS[lang];
   const isGolden = q.n === quiz.golden;
   const isExpertFinal = level.id === 6;
@@ -355,7 +218,7 @@ export default function Play() {
   }, [idx, quiz]);
 
   const confirm = useCallback(() => {
-    if (selected === null) return;
+    if (phase !== 'question' || selected === null) return;
     saveAttempt(selected);
 
     if (selected === correctDisplay) {
@@ -368,18 +231,19 @@ export default function Play() {
       setSelected(null);
       setLeft(TIME);
     }
-  }, [selected, correctDisplay, saveAttempt]);
+  }, [phase, selected, correctDisplay, saveAttempt]);
 
   const next = useCallback(() => {
     if (q.n === quiz.total) {
       sfx.win();
       setNewBest(recordScore(quiz.total, quiz.kids));
+      recordStars(rewards.stars, mode);
       setPhase('won');
     } else if (MS[q.n]) {
       sfx.levelup();
       setPhase('milestone');
     } else advance();
-  }, [q.n, advance, MS, quiz.total, quiz.kids]);
+  }, [q.n, advance, MS, quiz.total, quiz.kids, rewards.stars, mode]);
 
   const share = useCallback(async () => {
     const text = s.shareTextWin;
@@ -584,6 +448,7 @@ export default function Play() {
     setIdx(0);
     setSelected(null);
     setAttempts([]);
+    setFoundFlags({});
     setWrongAttempt(false);
     setReviewComplete(false);
     setVideoComplete(false);
@@ -662,21 +527,17 @@ export default function Play() {
     return () => clearTimeout(t);
   }, [phase]);
 
-  // تمرير تلقائي: السؤال الجديد من أعلى الصفحة، والنتيجة إلى مجال الرؤية
+  // Keep the scene in view for feedback; respect reduced motion during navigation.
   useEffect(() => {
-    if (phase === 'question') window.scrollTo({ top: 0, behavior: 'smooth' });
-    else if (phase === 'correct') {
-      const t = setTimeout(
-        () => revealRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
-        60,
-      );
-      return () => clearTimeout(t);
+    if (phase === 'question' || phase === 'correct') {
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
     }
   }, [phase, idx]);
 
   // اختصارات لوحة المفاتيح
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || (e.target instanceof Element && e.target.closest('button, a, input, textarea, select, summary'))) return;
       if (phase === 'question') {
         const n = Number(e.key);
         if (n >= 1 && n <= 4) {
@@ -740,11 +601,9 @@ export default function Play() {
         <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-slate-950/35" />
 
         <img
-          src={`/saif-${briefingPose}.png`}
+          src="/saif-1.png"
           alt={lang === 'ar' ? 'سيف' : lang === 'ur' ? 'سیف' : 'Saif'}
-          className={`pointer-events-none absolute end-[6%] top-[8%] z-10 h-[38vh] max-h-[430px] w-auto object-contain drop-shadow-2xl transition-transform duration-300 sm:h-[48vh] ${
-            briefingSpeaking ? 'scale-[1.02]' : 'scale-100'
-          }`}
+          className="pointer-events-none absolute end-[6%] top-[8%] z-10 h-[38vh] max-h-[430px] w-auto object-contain drop-shadow-2xl transition-transform duration-300 sm:h-[48vh] scale-100"
         />
 
         <div className="relative z-20 mx-auto flex min-h-dvh w-full max-w-6xl flex-col justify-end px-4 pb-6 sm:px-6 sm:pb-10">
@@ -771,28 +630,11 @@ export default function Play() {
               >
                 {briefingText}
               </p>
-
-              {briefingVoiceLoading && (
-                <p className="ink-sm mt-3 text-xs font-bold text-[var(--fg-muted)]">
-                  {lang === 'ar' ? 'جارٍ تجهيز الصوت…' : lang === 'ur' ? 'آواز تیار ہو رہی ہے…' : 'Preparing voice…'}
-                </p>
-              )}
-
-              {briefingVoiceError && (
-                <p className="ink-sm mt-3 text-xs font-bold text-red-700">
-                  {lang === 'ar'
-                    ? 'تعذر تشغيل الصوت على هذا الجهاز.'
-                    : lang === 'ur'
-                      ? 'اس ڈیوائس پر آواز نہیں چل سکی۔'
-                      : 'The voice could not play on this device.'}
-                </p>
-              )}
             </div>
 
             <button
               type="button"
               onClick={() => {
-                stopBriefingVoice();
                 sfx.confirm();
                 setPhase('gender');
               }}
@@ -1555,23 +1397,10 @@ export default function Play() {
     return (
       <Shell dim={0.45}>
         <div className="anim-in flex min-h-[80dvh] flex-col items-center justify-center text-center">
-          <img src={playerIdleAvatar} alt="" aria-hidden className="h-44 w-36 object-contain drop-shadow-lg" />
-          <p className="pixel ink mt-6 text-lg text-[var(--gold-dark)] sm:text-2xl" dir="ltr">
-            STAGE CLEAR
-          </p>
-          <Panel tone="dark" className="mt-6 w-full max-w-md p-6">
-            <p className="ink text-xl font-black leading-relaxed">
-              {MS[q.n][lang]}
-            </p>
-            <p className="tnum ink-sm mt-3 text-sm font-bold" style={{ color: '#c6d8ee' }}>
-              {q.n} / {quiz.total}
-            </p>
-            {q.n === 15 && (
-              <p className="ink-sm mt-4 text-sm font-black leading-7 text-[var(--red)]">
-                {s.expertStage}
-              </p>
-            )}
-          </Panel>
+          <h1 className="text-xl font-black">{lang === 'ar' ? 'رحلة درع أم القيوين' : lang === 'ur' ? 'ام القیوین کی ڈھال کا سفر' : 'UAQ Shield journey'}</h1>
+          <p className="my-3 text-sm font-bold">{MS[q.n][lang]}</p>
+          <ShieldMap mode={mode} levels={quiz.levels} completedThrough={q.n} lang={lang} />
+          <p className="mt-3 text-sm font-bold" dir="ltr">{q.n} / {quiz.total} · ★ {rewards.stars}</p>
           <PixelButton size="lg" className="mt-7 w-full max-w-md" onClick={advance}>
             {s.continue}
           </PixelButton>
@@ -1759,6 +1588,21 @@ export default function Play() {
             <p className="ink-sm mt-4 text-sm font-black text-[var(--green)]">{s.tagline}</p>
           </Panel>
 
+          <Panel className="mt-5 p-4">
+            <p className="text-2xl font-black text-[var(--green-dark)]" data-testid="stars-total">★ {rewards.stars} / {quiz.total * 2}</p>
+            <p className="mt-1 text-xs font-bold text-[var(--fg-muted)]">
+              {lang === 'ar' ? 'أفضل رصيد نجوم' : lang === 'ur' ? 'بہترین ستارے' : 'Best stars'}: {starBest[mode]}
+            </p>
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={lang === 'ar' ? 'الأوسمة المكتسبة' : lang === 'ur' ? 'حاصل کردہ تمغے' : 'Earned badges'}>
+              {rewards.badges.map((badge) => (
+                <li key={badge.id} className="flex flex-col items-center gap-2 text-xs font-bold">
+                  <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--panel-2)] text-2xl" aria-hidden>{badge.icon}</span>
+                  {badge.name[lang]}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
           <div className="mt-5 space-y-2">
             <PixelButton size="lg" className="w-full" onClick={() => setPhase('review')}>
               {reviewMistakes.length > 0
@@ -1786,32 +1630,15 @@ export default function Play() {
   /* -------------------------------------------------- شاشة السؤال / الكشف */
   const revealed = phase === 'correct';
 
-  const vignette =
-    level.id === 6
-      ? 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 44%, rgba(6,44,40,0.58) 100%)'
-      : level.id === 5
-      ? 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 46%, rgba(70,45,0,0.55) 100%)'
-      : level.id === 4
-        ? 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 50%, rgba(90,10,10,0.5) 100%)'
-        : level.id === 3
-          ? 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 55%, rgba(6,16,50,0.42) 100%)'
-          : null;
-
   return (
-    <Shell dim={0.68}>
-      {vignette && (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-0"
-          style={{ zIndex: -5, background: vignette }}
-        />
-      )}
-      <div className="flex flex-1 flex-col">
+    <Shell dim={0.68} location={levelLocation(mode, level.id)} nextLocation={nextLevel ? levelLocation(mode, nextLevel.id) : undefined}>
+      <div className="quiz-play flex flex-1 flex-col" data-revealed={revealed}>
         {/* HUD */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Hearts alive label={s.oneLife} />
             <Chip color={level.color}>{level[lang]}</Chip>
+            <span className="star-count" aria-live="polite" aria-label={`${lang === 'ar' ? 'نجوم' : lang === 'ur' ? 'ستارے' : 'Stars'}: ${rewards.stars}`} data-testid="star-count">★ {rewards.stars}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="pixel ink-sm text-[10px] text-[var(--fg-muted)]">
@@ -1827,7 +1654,7 @@ export default function Play() {
 
         {/* شريط التقدّم */}
         <div
-          className="mt-2 flex gap-1 rounded-full p-1"
+          className="quiz-progress mt-2 flex gap-1 rounded-full p-1"
           style={{ border: '1px solid var(--line)', background: '#ffffff', boxShadow: 'var(--shadow-sm)' }}
         >
           {quiz.questions.map((item) => (
@@ -1843,7 +1670,7 @@ export default function Play() {
         </div>
 
         {/* الشخصية + السلسلة */}
-        <div className="mt-4 flex items-center justify-center gap-3">
+        <div className="quiz-character mt-4 flex items-center justify-center gap-3">
           <img
             src={playerIdleAvatar}
             alt={
@@ -1878,13 +1705,13 @@ export default function Play() {
         </div>
 
         {!quiz.kids && q.n === 16 && (
-          <Panel tone="red" className="anim-in mt-4 px-4 py-3 text-center">
+          <Panel tone="red" className="quiz-stage anim-in mt-4 px-4 py-3 text-center">
             <span className="ink-sm text-xs font-black leading-7">{s.expertStage}</span>
           </Panel>
         )}
         {isExpertFinal && q.n === 21 && (
           <div
-            className="anim-in mt-4 rounded-3xl px-4 py-3 text-center"
+            className="quiz-stage anim-in mt-4 rounded-3xl px-4 py-3 text-center"
             style={{ background: 'linear-gradient(160deg, #134e4a, #0f766e)', boxShadow: 'var(--shadow)' }}
           >
             <span className="pixel block text-[10px] text-[#7dd3c8]" dir="ltr">
@@ -1899,7 +1726,7 @@ export default function Play() {
           </div>
         )}
         {isGolden && (
-          <Panel tone="gold" className="anim-in mt-4 px-4 py-3 text-center">
+          <Panel tone="gold" className="quiz-stage anim-in mt-4 px-4 py-3 text-center">
             <span className="pixel ink-sm block text-[9px]" dir="ltr">
               ★ GOLDEN QUESTION ★
             </span>
@@ -1908,7 +1735,18 @@ export default function Play() {
           </Panel>
         )}
 
-        <Panel tone="dark" className="anim-in mt-3 p-5" key={q.n}>
+        <ScamScene
+          key={`${mode}-${q.n}`}
+          scene={scene}
+          lang={lang}
+          inspect={revealed}
+          found={foundFlags[q.n] ?? []}
+          onFind={findFlag}
+          feedback={revealed ? 'correct' : wrongAttempt ? 'wrong' : null}
+          feedbackId={questionAttempts.length}
+        />
+
+        <Panel className="quiz-question anim-in mt-3 p-5" key={q.n}>
           <h1 className="ink-sm text-base font-black leading-9 sm:text-lg sm:leading-10">
             {copy.text}
           </h1>
@@ -1955,7 +1793,7 @@ export default function Play() {
           </Panel>
         )}
 
-        <div className="mt-3 space-y-2">
+        <div className="quiz-options mt-3 space-y-2">
           {ord.map((oi, di) => {
             const opt = copy.options[oi];
             const picked = selected === di;
@@ -2009,7 +1847,7 @@ export default function Play() {
           </div>
         ) : (
           <div
-            className="sticky bottom-0 z-10 mt-auto pt-5"
+            className="quiz-confirm sticky bottom-0 z-10 mt-auto pt-5"
             style={{ background: 'linear-gradient(180deg, rgba(240,248,255,0) 0%, rgba(240,248,255,0.94) 45%)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
             <PixelButton
@@ -2058,7 +1896,7 @@ function TimeBar({ left, total }: { left: number; total: number }) {
   const filled = Math.ceil((left / total) * cells);
   const danger = left <= 6;
   return (
-    <div className="mt-3 flex items-center gap-2 px-1">
+    <div className="quiz-time mt-3 flex items-center gap-2 px-1">
       <span className="pixel text-[9px]" style={{ color: danger ? 'var(--red)' : 'var(--fg-muted)' }}>
         TIME
       </span>
