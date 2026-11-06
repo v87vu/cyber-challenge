@@ -40,7 +40,19 @@ export async function GET(request: Request) {
       ),
     ]);
 
+    const yes = (value: unknown) => value === true || ['true', 'yes', '1'].includes(String(value ?? '').toLowerCase());
+    const no = (value: unknown) => value === false || ['false', 'no', '0'].includes(String(value ?? '').toLowerCase());
+    const journey = {
+      completed: recentGames.filter((game) => yes(game.completed)).length,
+      incomplete: recentGames.filter((game) => no(game.completed)).length,
+      certificateRequested: recentGames.filter((game) => yes(game.certificate_requested)).length,
+      certificateSent: recentGames.filter((game) => yes(game.certificate_sent)).length,
+      fraudYes: recentGames.filter((game) => yes(game.fraud_experience)).length,
+      extortionYes: recentGames.filter((game) => yes(game.extortion_experience)).length,
+    };
+
     return NextResponse.json({
+      journey,
       summary: summaryRows[0] ?? {
         total_players: 0,
         total_games: 0,

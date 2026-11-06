@@ -251,18 +251,10 @@ export default function Play() {
     playDeviceFallback();
   }, [briefingText, lang, stopBriefingVoice]);
 
+  // سيف لا يتكلم بصوت — قرار ثابت من صاحب المشروع؛ الرسالة تظهر نصاً فقط
   useEffect(() => {
-    if (phase !== 'briefing') {
-      stopBriefingVoice();
-      return;
-    }
-
-    void playBriefingVoice();
-
-    return () => {
-      stopBriefingVoice();
-    };
-  }, [phase, playBriefingVoice, stopBriefingVoice]);
+    stopBriefingVoice();
+  }, [phase, stopBriefingVoice]);
 
   useEffect(() => {
     if (phase !== 'briefing' || !briefingSpeaking) {
