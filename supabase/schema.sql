@@ -67,3 +67,19 @@ group by quiz_type, question_number;
 revoke all on public.question_statistics from anon, authenticated;
 revoke all on public.game_sessions from anon, authenticated;
 revoke all on public.answer_attempts from anon, authenticated;
+
+-- ملخص لوحة الإدارة (صف واحد)
+create or replace view public.game_dashboard_summary as
+select
+  count(distinct player_id)::int                              as total_players,
+  count(*)::int                                               as total_games,
+  coalesce(sum(wrong_attempts), 0)::int                       as total_wrong_attempts,
+  coalesce(round(avg(duration_seconds)), 0)::int              as average_duration_seconds,
+  count(*) filter (where lang = 'ar')::int                    as arabic_games,
+  count(*) filter (where lang = 'en')::int                    as english_games,
+  count(*) filter (where lang = 'ur')::int                    as urdu_games,
+  count(*) filter (where quiz_type = 'kids')::int             as kids_games,
+  count(*) filter (where quiz_type = 'adult')::int            as adult_games
+from public.game_sessions;
+
+revoke all on public.game_dashboard_summary from anon, authenticated;
