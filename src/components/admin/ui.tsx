@@ -76,3 +76,52 @@ export function StackedBar({ items, labels, language }: { items: Array<{ key: st
     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">{items.map((item, index) => <span key={item.key} className="flex items-center gap-1.5 text-[11px] font-bold text-[#526d6a]"><i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[index % colors.length] }}/>{labels[item.key] ?? item.key} <b className="tnum">{Math.round(item.percent)}%</b></span>)}</div>
   </div>;
 }
+
+/* مخطط دائري (Donut) — للأجزاء القليلة من كلٍّ واحد (٢–٤ أجزاء).
+   ألوان مُتحقَّق منها لعمى الألوان (dataviz validator: ALL PASS)، واللون يتبع الفئة لا ترتيبها. */
+export const DONUT_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'];
+const NEUTRAL = '#b9b8b0';
+
+export function Donut({ items, labels, colors, centerLabel, language }: {
+  items: Array<{ key: string; count: number }>;
+  labels: Record<string, string>;
+  colors: Record<string, string>;
+  centerLabel: string;
+  language: AdminLanguage;
+}) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  if (!total) return <EmptyState>{language === 'ar' ? 'لا توجد بيانات بعد.' : 'No data yet.'}</EmptyState>;
+  const size = 148, r = 56, stroke = 20, c = size / 2;
+  const visible = items.filter((item) => item.count > 0);
+  let angle = -90;
+  const arc = (from: number, to: number) => {
+    const rad = (a: number) => (a * Math.PI) / 180;
+    const x1 = c + r * Math.cos(rad(from)), y1 = c + r * Math.sin(rad(from));
+    const x2 = c + r * Math.cos(rad(to)), y2 = c + r * Math.sin(rad(to));
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+  };
+  const pct = (n: number) => Math.round((n / total) * 100);
+  return <div className="flex items-center gap-4">
+    <svg viewBox={`0 0 ${size} ${size}`} className="h-32 w-32 shrink-0" role="img"
+      aria-label={visible.map((item) => `${labels[item.key] ?? item.key}: ${item.count} (${pct(item.count)}%)`).join(', ')}>
+      <circle cx={c} cy={c} r={r} fill="none" stroke="#edf3f2" strokeWidth={stroke}/>
+      {visible.length === 1
+        ? <circle cx={c} cy={c} r={r} fill="none" stroke={colors[visible[0].key] ?? NEUTRAL} strokeWidth={stroke}><title>{`${labels[visible[0].key] ?? visible[0].key}: ${visible[0].count} (100%)`}</title></circle>
+        : visible.map((item) => {
+          const sweep = (item.count / total) * 360;
+          const from = angle + 1.2, to = angle + sweep - 1.2;
+          angle += sweep;
+          return <path key={item.key} d={arc(from, Math.max(from + 0.5, to))} fill="none" stroke={colors[item.key] ?? NEUTRAL} strokeWidth={stroke} strokeLinecap="butt"
+            className="transition-opacity hover:opacity-80"><title>{`${labels[item.key] ?? item.key}: ${item.count} (${pct(item.count)}%)`}</title></path>;
+        })}
+      <text x={c} y={c - 2} textAnchor="middle" className="tnum" style={{ fontSize: 26, fontWeight: 900, fill: '#0b0b0b' }}>{total}</text>
+      <text x={c} y={c + 18} textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: '#52514e' }}>{centerLabel}</text>
+    </svg>
+    <ul className="min-w-0 max-w-[15rem] flex-1 space-y-2">{items.map((item) => <li key={item.key} className="flex items-center gap-2 text-xs font-bold text-[#52514e]">
+      <i className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: colors[item.key] ?? NEUTRAL }}/>
+      <span className="truncate text-[#0b0b0b]">{labels[item.key] ?? item.key}</span>
+      <span className="ms-auto tnum text-[#0b0b0b]">{item.count}</span>
+      <span className="w-10 text-end tnum">{pct(item.count)}%</span>
+    </li>)}</ul>
+  </div>;
+}

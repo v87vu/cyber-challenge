@@ -1,6 +1,6 @@
 import type { AdminLanguage, Period, RecentGame, StatsData, VersionFilter } from './types';
-import { audienceGroups, dailySeries, formatDate, formatDuration, playerName, summarizeGames } from './data';
-import { Card, Chip, EmptyState, Funnel, LineChart, SectionTitle, StackedBar } from './ui';
+import { audienceGroups, dailySeries, formatDate, formatDuration, playerName, summarizeGames, trueFlag } from './data';
+import { Card, Chip, DONUT_COLORS, Donut, EmptyState, Funnel, LineChart, SectionTitle, StackedBar } from './ui';
 import SensitiveReports from './SensitiveReports';
 import { GapList } from './AwarenessGaps';
 
@@ -19,6 +19,11 @@ export default function Overview({ data, games, language, period, version, onPer
     age: {}, language: { ar: ar ? 'العربية' : 'Arabic', en: ar ? 'الإنجليزية' : 'English', ur: ar ? 'الأردية' : 'Urdu' },
     gender: { male: ar ? 'ذكور' : 'Male', female: ar ? 'إناث' : 'Female', unknown: ar ? 'غير محدد' : 'Not specified' },
     audience: { adult: ar ? 'بالغون' : 'Adults', kids: ar ? 'أطفال' : 'Kids' },
+  };
+  const donutColors: Record<string, Record<string, string>> = {
+    language: { ar: DONUT_COLORS[0], en: DONUT_COLORS[1], ur: DONUT_COLORS[2] },
+    gender: { male: DONUT_COLORS[0], female: DONUT_COLORS[1] },
+    audience: { adult: DONUT_COLORS[0], kids: DONUT_COLORS[1] },
   };
   const audienceTitles: Record<string, string> = { age: ar ? 'الفئة العمرية' : 'Age group', language: ar ? 'اللغة' : 'Language', gender: ar ? 'الجنس' : 'Gender', audience: ar ? 'البالغون / الأطفال' : 'Adults / kids' };
   return <div className="space-y-4">
@@ -46,7 +51,12 @@ export default function Overview({ data, games, language, period, version, onPer
 
     <Card className="p-4 md:p-5"><SectionTitle title={ar ? 'أهم 5 فجوات وعي' : 'Top 5 awareness gaps'} hint={ar ? 'تظهر الأسئلة بعد مشاركة 10 لاعبين على الأقل.' : 'Questions appear after at least 10 players.'}/>{games.length ? <GapList questions={data.questions} language={language} limit={5} minimumPlayers={10}/> : <div className="mt-4"><EmptyState>{ar ? 'لا توجد بيانات كافية بعد' : 'Not enough data yet'}</EmptyState></div>}</Card>
 
-    <section><div className="mb-3"><h2 className="text-base font-black">{ar ? 'الجمهور' : 'Audience'}</h2></div>{games.length ? <div className="grid gap-3 sm:grid-cols-2">{audience.map((group) => <Card key={group.id} className="p-4"><h3 className="mb-4 text-xs font-black">{audienceTitles[group.id]}</h3><StackedBar items={group.items} labels={labels[group.id]} language={language}/></Card>)}</div> : <Card className="p-4"><EmptyState>{ar ? 'لا توجد بيانات عن الجمهور في هذه الفترة.' : 'No audience data in this period.'}</EmptyState></Card>}</section>
+    <section><div className="mb-3"><h2 className="text-base font-black">{ar ? 'الجمهور' : 'Audience'}</h2></div>{games.length ? <div className="grid gap-3 sm:grid-cols-2">
+      <Card className="p-4"><h3 className="mb-3 text-xs font-black">{ar ? 'حالة الجولات' : 'Round status'}</h3><Donut items={[{ key: 'done', count: games.filter((g) => trueFlag(g.completed)).length }, { key: 'open', count: games.filter((g) => !trueFlag(g.completed)).length }]} labels={{ done: ar ? 'أكملوا' : 'Completed', open: ar ? 'لم يكملوا' : 'Not finished' }} colors={{ done: DONUT_COLORS[2], open: DONUT_COLORS[3] }} centerLabel={ar ? 'جولة' : 'rounds'} language={language}/></Card>
+      {audience.map((group) => <Card key={group.id} className="p-4"><h3 className="mb-3 text-xs font-black">{audienceTitles[group.id]}</h3>{group.id === 'age'
+        ? <StackedBar items={group.items} labels={labels[group.id]} language={language}/>
+        : <Donut items={group.items} labels={labels[group.id]} colors={donutColors[group.id] ?? {}} centerLabel={ar ? 'لاعب' : 'players'} language={language}/>}</Card>)}
+    </div> : <Card className="p-4"><EmptyState>{ar ? 'لا توجد بيانات عن الجمهور في هذه الفترة.' : 'No audience data in this period.'}</EmptyState></Card>}</section>
 
     <Card className="p-4 md:p-5"><SectionTitle title={ar ? 'أحدث 5 جولات' : 'Latest 5 rounds'}/>{games.length ? <div className="mt-3 divide-y divide-[#e7efed]">{games.slice(0, 5).map((game) => <div key={game.game_id} className="flex items-center justify-between gap-3 py-3 text-xs"><div className="min-w-0"><p className="truncate font-black">{playerName(game, language)}</p><p className="mt-1 text-[10px] font-semibold text-[#718683]">{formatDate(game.played_at, language)}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${game.completed === true ? 'bg-[#e7f3f1] text-[#0f766e]' : 'bg-[#f0f4f3] text-[#657c7a]'}`}>{game.completed === true ? (ar ? 'مكتملة' : 'Completed') : (ar ? 'لم تكتمل' : 'Incomplete')}</span></div>)}</div> : <div className="mt-3"><EmptyState>{ar ? 'لا توجد جولات بعد.' : 'No rounds yet.'}</EmptyState></div>}</Card>
   </div>;
